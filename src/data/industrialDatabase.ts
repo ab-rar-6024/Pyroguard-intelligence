@@ -1,4 +1,4 @@
-import { IndustrialFacility } from '../types';
+import { IndustrialFacility } from '../types.js';
 
 export const GLOBAL_INDUSTRIAL_FACILITIES: IndustrialFacility[] = [
   // North America

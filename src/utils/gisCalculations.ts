@@ -1,4 +1,4 @@
-import { ThermalAnomaly, IndustrialFacility, AnomalySeverity, EmergencyAlert, AIAuditReport } from '../types';
+import { ThermalAnomaly, IndustrialFacility, AnomalySeverity, EmergencyAlert, AIAuditReport } from '../types.js';
 import jsPDF from 'jspdf';
 
 // Haversine formula to compute great circle distance in km

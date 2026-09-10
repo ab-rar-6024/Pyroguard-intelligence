@@ -1,6 +1,6 @@
-import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase';
-import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore } from './gisCalculations';
-import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } from '../types';
+import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
+import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore } from './gisCalculations.js';
+import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } from '../types.js';
 
 let currentMapKey = process.env.NASA_FIRMS_MAP_KEY || '4ddefd0f9c4e2cf87148595c54a19642';
 
