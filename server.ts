@@ -1,6 +1,6 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from './src/data/industrialDatabase';
 import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore, exportToGeoJSON, exportToCSV } from './src/utils/gisCalculations';
@@ -204,7 +204,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     activeFacilities: GLOBAL_INDUSTRIAL_FACILITIES.length,
     activeAlerts: activeAlerts.length,
     firmsStatus,
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY)
+    groqConfigured: Boolean(process.env.GROQ_API_KEY)
   });
 });
 
@@ -357,16 +357,16 @@ function cleanAndParseJSON(text: string): any {
 // POST /api/ai/analyze-threat - Generate AI Tactical Incident Intelligence & Hazard Assessment
 app.post(['/api/ai/analyze-threat', '/api/gemini/analyze-threat'], async (req: Request, res: Response) => {
   try {
-    const { 
-      facilityName, 
-      facilityType, 
-      distanceKm, 
-      frpMW, 
-      chemicals, 
-      windSpeedKmh, 
-      windDirectionDeg, 
+    const {
+      facilityName,
+      facilityType,
+      distanceKm,
+      frpMW,
+      chemicals,
+      windSpeedKmh,
+      windDirectionDeg,
       blastRadiusKm,
-      provider = 'gemini',
+      provider = 'groq',
       model,
       customApiKey
     } = req.body;
@@ -393,85 +393,89 @@ app.post(['/api/ai/analyze-threat', '/api/gemini/analyze-threat'], async (req: R
       chemicalHazardsAssessment: `High combustion risk for ${chemicalList}. Toxic gas cloud hazard downwind.`
     };
 
-    // 1. Google Gemini API Provider
-    if (provider === 'gemini') {
-      const apiKey = process.env.GEMINI_API_KEY;
+    // 1. Groq API Provider
+    if (provider === 'groq') {
+      const apiKey = customApiKey || process.env.GROQ_API_KEY;
       if (!apiKey) {
-        return res.json({ 
-          success: true, 
-          report: fallbackReport, 
-          source: 'Rule-Based DSS Algorithm (Configure GEMINI_API_KEY in Settings for Live AI)',
-          provider: 'gemini'
+        return res.json({
+          success: true,
+          report: fallbackReport,
+          source: 'Rule-Based DSS Algorithm (Configure GROQ_API_KEY in Settings for Live AI)',
+          provider: 'groq'
         });
       }
 
       const candidateModels = [
-        model || 'gemini-2.5-flash',
-        'gemini-3.8-flash',
-        'gemini-3.1-flash-lite',
-        'gemini-flash-latest'
+        model || 'openai/gpt-oss-120b',
+        'openai/gpt-oss-20b',
+        'qwen/qwen3.8-27b'
       ];
       // Deduplicate candidate models
       const uniqueModels = Array.from(new Set(candidateModels));
 
-      let generatedReport = null;
-      let usedModel = uniqueModels[0];
-
-      const prompt = `You are the Chief Industrial Fire & Hazard Mitigation Strategist for PyroGuard. Analyze this real-time incident:
-Facility: ${facilityName} (${facilityType})
-Stored Hazardous Chemicals: ${chemicalList}
-Distance to NASA FIRMS Hotspot: ${distanceKm} km
-Fire Radiative Power (FRP): ${frpMW} MW
-Wind Speed & Bearing: ${windSpeedKmh} km/h from ${windDirectionDeg}°
-Structural Blast Radius: ${calculatedRadius} km
-
-Respond in pure JSON matching this schema:
+      const systemPrompt = `You are the Chief Industrial Fire & Hazard Mitigation Strategist for PyroGuard. Respond ONLY with valid JSON matching this schema:
 {
   "executiveSummary": "2-3 authoritative sentences on threat level and immediate flashover risks",
   "blastRadiusEvaluation": "specific evacuation distances and toxic vapor cloud dispersion analysis",
   "recommendedApparatus": ["4 specific firefighting/hazmat apparatus"],
   "mitigationDirectives": ["4 prioritized operational commands for the incident commander"],
   "containmentStrategy": "1-2 sentences on foam/water barrier deployment",
-  "chemicalHazardsAssessment": "1-2 sentences analyzing ignition and thermal decomposition risks for ${chemicalList}"
+  "chemicalHazardsAssessment": "1-2 sentences analyzing ignition and thermal decomposition risks"
 }`;
 
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      });
+      const userPrompt = `Analyze this real-time incident:
+Facility: ${facilityName} (${facilityType})
+Stored Hazardous Chemicals: ${chemicalList}
+Distance to NASA FIRMS Hotspot: ${distanceKm} km
+Fire Radiative Power (FRP): ${frpMW} MW
+Wind Speed & Bearing: ${windSpeedKmh} km/h from ${windDirectionDeg}°
+Structural Blast Radius: ${calculatedRadius} km`;
+
+      let generatedReport = null;
+      let usedModel = uniqueModels[0];
 
       for (const candidate of uniqueModels) {
         try {
-          const response = await ai.models.generateContent({
-            model: candidate,
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-            }
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: candidate,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              response_format: { type: 'json_object' }
+            })
           });
 
-          const parsed = cleanAndParseJSON(response.text || '');
+          if (!response.ok) {
+            continue;
+          }
+
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          const parsed = cleanAndParseJSON(content);
           if (parsed && parsed.executiveSummary) {
             generatedReport = parsed;
             usedModel = candidate;
             break;
           }
         } catch (candidateErr) {
-          // Continue to next available model candidate if 503 high-demand or rate-limited
+          // Continue to next available model candidate if rate-limited or unavailable
           continue;
         }
       }
 
       if (generatedReport) {
-        return res.json({ 
-          success: true, 
-          report: generatedReport, 
-          source: `Google Gemini API (${usedModel})`,
-          provider: 'gemini',
+        return res.json({
+          success: true,
+          report: generatedReport,
+          source: `Groq API (${usedModel})`,
+          provider: 'groq',
           model: usedModel
         });
       }
@@ -479,8 +483,8 @@ Respond in pure JSON matching this schema:
       return res.json({
         success: true,
         report: fallbackReport,
-        source: 'Google Gemini DSS Mode (High Demand Fallback)',
-        provider: 'gemini',
+        source: 'Groq DSS Mode (High Demand Fallback)',
+        provider: 'groq',
         model: uniqueModels[0]
       });
     }
@@ -630,70 +634,73 @@ Respond in pure JSON matching this schema:
 // POST /api/ai/chat - Interactive AI Incident Commander Co-Pilot
 app.post('/api/ai/chat', async (req: Request, res: Response) => {
   try {
-    const { prompt, context, provider = 'gemini', model, customApiKey } = req.body;
+    const { prompt, context, provider = 'groq', model, customApiKey } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
-    // Gemini Provider
-    if (provider === 'gemini') {
-      const apiKey = process.env.GEMINI_API_KEY;
+    // Groq Provider
+    if (provider === 'groq') {
+      const apiKey = customApiKey || process.env.GROQ_API_KEY;
       if (!apiKey) {
         return res.json({
           success: true,
-          reply: `[Gemini Tactical Advisor] Incident Guidance: Ensure immediate upwind isolation of ${context?.facilityName || 'the facility'} outside the ${context?.blastRadiusKm || 3.0} km perimeter. Engage automated deluge foam curtains for ${context?.chemicals ? (Array.isArray(context.chemicals) ? context.chemicals.join(', ') : context.chemicals) : 'volatile hydrocarbons'}. (Tip: Add GEMINI_API_KEY in Settings > Secrets for live custom AI inference).`,
-          provider: 'gemini',
-          model: 'gemini-3.8-flash'
+          reply: `[Groq Tactical Advisor] Incident Guidance: Ensure immediate upwind isolation of ${context?.facilityName || 'the facility'} outside the ${context?.blastRadiusKm || 3.0} km perimeter. Engage automated deluge foam curtains for ${context?.chemicals ? (Array.isArray(context.chemicals) ? context.chemicals.join(', ') : context.chemicals) : 'volatile hydrocarbons'}. (Tip: Add GROQ_API_KEY in Settings > Secrets for live custom AI inference).`,
+          provider: 'groq',
+          model: 'openai/gpt-oss-120b'
         });
       }
 
       const candidateModels = [
-        model || 'gemini-2.5-flash',
-        'gemini-3.8-flash',
-        'gemini-3.1-flash-lite',
-        'gemini-flash-latest'
+        model || 'openai/gpt-oss-120b',
+        'openai/gpt-oss-20b',
+        'qwen/qwen3.8-27b'
       ];
       const uniqueModels = Array.from(new Set(candidateModels));
 
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      });
-
-      const systemInstruction = `You are the PyroGuard AI Incident Commander Co-Pilot. You advise industrial facility operators and fire chiefs on chemical safety, fire suppression, blast radius calculations, NFPA/OSHA compliance, and emergency evacuation. Provide direct, tactical, and safety-critical guidance. Incident Context: ${JSON.stringify(context || {})}`;
+      const systemPrompt = `You are the PyroGuard AI Incident Commander Co-Pilot. You advise industrial facility operators and fire chiefs on chemical safety, fire suppression, blast radius calculations, NFPA/OSHA compliance, and emergency evacuation. Provide direct, tactical, and safety-critical guidance. Incident Context: ${JSON.stringify(context || {})}`;
 
       for (const candidate of uniqueModels) {
         try {
-          const response = await ai.models.generateContent({
-            model: candidate,
-            contents: prompt,
-            config: {
-              systemInstruction,
-            }
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: candidate,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt }
+              ]
+            })
           });
 
-          if (response.text) {
+          if (!response.ok) {
+            continue;
+          }
+
+          const data = await response.json();
+          const reply = data.choices?.[0]?.message?.content;
+          if (reply) {
             return res.json({
               success: true,
-              reply: response.text,
-              provider: 'gemini',
+              reply,
+              provider: 'groq',
               model: candidate
             });
           }
-        } catch (geminiChatErr) {
+        } catch (groqChatErr) {
           continue;
         }
       }
 
       return res.json({
         success: true,
-        reply: `[Gemini Advisory] Operational Directive: For ${context?.facilityName || 'the target asset'}: Deploy Class-B foam blankets to drainage basins, isolate pipeline manifolds, and maintain an upwind exclusion perimeter of ${context?.blastRadiusKm || 3.0} km.`,
-        provider: 'gemini',
+        reply: `[Groq Advisory] Operational Directive: For ${context?.facilityName || 'the target asset'}: Deploy Class-B foam blankets to drainage basins, isolate pipeline manifolds, and maintain an upwind exclusion perimeter of ${context?.blastRadiusKm || 3.0} km.`,
+        provider: 'groq',
         model: uniqueModels[0]
       });
     }

@@ -138,7 +138,7 @@ export interface AIAuditReport {
   generatedBy: string;
 }
 
-export type AIProvider = 'gemini' | 'openrouter' | 'huggingface';
+export type AIProvider = 'groq' | 'openrouter' | 'huggingface';
 
 export interface AIThreatAnalysisReport {
   executiveSummary: string;

@@ -40,17 +40,17 @@ const PROVIDERS: {
   description: string;
 }[] = [
   {
-    id: 'gemini',
-    name: 'Google Gemini API',
+    id: 'groq',
+    name: 'Groq API',
     badge: 'OFFICIAL',
     badgeColor: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
     icon: Sparkles,
     models: [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Ultra Reliable)' },
-      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Latest)' },
-      { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite (High Speed)' },
+      { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Ultra Reliable)' },
+      { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (High Speed)' },
+      { id: 'qwen/qwen3.8-27b', label: 'Qwen3.8 27B (Reasoning)' },
     ],
-    description: 'Server-side high-throughput reasoning with real-time chemical hazard assessment.'
+    description: 'Server-side ultra-low-latency inference on Groq LPUs with real-time chemical hazard assessment.'
   },
   {
     id: 'openrouter',
@@ -88,8 +88,8 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
   onTriggerDispatch,
 }) => {
   // Provider state
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.8-flash');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('groq');
+  const [selectedModel, setSelectedModel] = useState<string>('openai/gpt-oss-120b');
   const [customKey, setCustomKey] = useState<string>('');
   const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
 
@@ -293,7 +293,7 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
-            {selectedProvider !== 'gemini' && (
+            {selectedProvider !== 'groq' && (
               <button
                 onClick={() => setShowKeyInput(!showKeyInput)}
                 title="Optional custom API Key"
@@ -318,7 +318,7 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
         </div>
 
         {/* Optional Custom Key Sub-bar */}
-        {showKeyInput && selectedProvider !== 'gemini' && (
+        {showKeyInput && selectedProvider !== 'groq' && (
           <div className="px-3 sm:px-4 py-2 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 text-xs">
             <span className="text-slate-400 text-[11px]">Custom {selectedProvider === 'openrouter' ? 'OpenRouter' : 'Hugging Face'} Key:</span>
             <input
