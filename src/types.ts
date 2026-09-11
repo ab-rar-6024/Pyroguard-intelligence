@@ -116,7 +116,7 @@ export interface NotificationThresholds {
 }
 
 export interface GISLayerConfig {
-  mapStyle: 'dark' | 'satellite' | 'terrain' | 'osm';
+  mapStyle: 'dark' | 'satellite' | 'terrain' | 'osm' | 'nasa';
   showThermalOverlay: boolean;
   showFacilityMarkers: boolean;
   showBlastZones: boolean;

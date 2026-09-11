@@ -21,7 +21,10 @@ import {
   AlertTriangle,
   RotateCcw,
   Moon,
-  Satellite
+  Satellite,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { ThermalAnomaly, IndustrialFacility, GISLayerConfig } from '../types';
 import { CLASSIFICATION_META } from '../utils/classificationDisplay';
@@ -74,6 +77,24 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
   const [activeContinent, setActiveContinent] = useState('Global');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
+
+  // NASA satellite photography (GIBS) is processed with ~1 day of latency,
+  // so "yesterday" (UTC) is the most recent day reliably available.
+  const yesterdayUTC = (() => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const [nasaImageryDate, setNasaImageryDate] = useState<string>(yesterdayUTC);
+
+  const shiftNasaImageryDate = (deltaDays: number) => {
+    setNasaImageryDate((prev) => {
+      const d = new Date(`${prev}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + deltaDays);
+      const next = d.toISOString().slice(0, 10);
+      return next > yesterdayUTC ? yesterdayUTC : next;
+    });
+  };
 
   // Initialize Map instance
   useEffect(() => {
@@ -138,6 +159,13 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
       tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
       maxNativeZoom = 18;
       maxZoom = 19;
+    } else if (gisConfig.mapStyle === 'nasa') {
+      // NASA GIBS - actual VIIRS Suomi-NPP satellite photography (Corrected
+      // Reflectance True Color), the same real-time imagery feed NASA's own
+      // Worldview tool uses. Free, keyless, updated daily.
+      tileUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${nasaImageryDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`;
+      maxNativeZoom = 9;
+      maxZoom = 15;
     } else {
       // Standard OpenStreetMap
       tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -150,7 +178,7 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
       maxNativeZoom,
       subdomains,
     }).addTo(map);
-  }, [gisConfig.mapStyle]);
+  }, [gisConfig.mapStyle, nasaImageryDate]);
 
   // Render Hotspots, Industrial Markers, Blast Buffers, and Wind Vectors
   useEffect(() => {
@@ -565,7 +593,44 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
             <Satellite className="w-3.5 h-3.5 text-emerald-400" />
             <span className="hidden xs:inline sm:inline">Satellite</span>
           </button>
+
+          <button
+            onClick={() => onUpdateGISConfig({ mapStyle: 'nasa' })}
+            title="Real NASA satellite photo of Earth (updated daily)"
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded text-[10px] sm:text-[11px] transition-all cursor-pointer ${
+              gisConfig.mapStyle === 'nasa'
+                ? 'bg-sky-950/70 text-sky-400 font-bold shadow-inner border border-sky-500/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden xs:inline sm:inline">NASA Photo</span>
+          </button>
         </div>
+
+        {/* NASA Imagery Date Navigator (only shown in NASA Photo mode) */}
+        {gisConfig.mapStyle === 'nasa' && (
+          <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md px-1.5 py-1 rounded-lg border border-sky-500/30 shadow-xl text-[10px] sm:text-[11px] font-mono flex-shrink-0">
+            <button
+              onClick={() => shiftNasaImageryDate(-1)}
+              title="Previous day"
+              className="p-1 rounded text-sky-400 hover:bg-sky-950/50 cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-slate-300 px-1 whitespace-nowrap" title="Real satellite photography has ~1 day of processing delay, so this is the most recent day available - not this exact moment.">
+              {nasaImageryDate}
+            </span>
+            <button
+              onClick={() => shiftNasaImageryDate(1)}
+              disabled={nasaImageryDate >= yesterdayUTC}
+              title="Next day"
+              className="p-1 rounded text-sky-400 hover:bg-sky-950/50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* GIS Layer Switcher Dropdown */}
         <div className="relative flex-shrink-0">
@@ -583,17 +648,24 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
                 Base Map Layer
               </div>
               <div className="grid grid-cols-2 gap-1 mb-3">
-                {(['dark', 'satellite', 'terrain', 'osm'] as const).map((style) => (
+                {([
+                  { id: 'dark', label: 'Dark' },
+                  { id: 'satellite', label: 'Satellite' },
+                  { id: 'terrain', label: 'Terrain' },
+                  { id: 'osm', label: 'OSM' },
+                  { id: 'nasa', label: 'NASA Photo' },
+                ] as const).map(({ id, label }) => (
                   <button
-                    key={style}
-                    onClick={() => onUpdateGISConfig({ mapStyle: style })}
-                    className={`px-2 py-1 rounded text-center capitalize transition-colors cursor-pointer ${
-                      gisConfig.mapStyle === style
+                    key={id}
+                    onClick={() => onUpdateGISConfig({ mapStyle: id })}
+                    title={id === 'nasa' ? 'Real satellite photo of Earth, updated daily by NASA' : undefined}
+                    className={`px-2 py-1 rounded text-center transition-colors cursor-pointer ${
+                      gisConfig.mapStyle === id
                         ? 'bg-orange-500 text-white font-bold'
                         : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
                     }`}
                   >
-                    {style}
+                    {label}
                   </button>
                 ))}
               </div>
