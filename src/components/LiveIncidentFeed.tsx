@@ -85,47 +85,47 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-200">{a.satellite}</span>
-                      <span className="text-[10px] text-slate-400">
-                        {a.acq_date} {a.acq_time}
-                      </span>
-                      <span className="text-[10px] px-1 bg-slate-800 rounded text-slate-400">
-                        {a.daynight === 'D' ? '☀️ Day' : '🌙 Night'}
-                      </span>
-                    </div>
-
-                    <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                      Lat: {a.latitude.toFixed(3)}, Lon: {a.longitude.toFixed(3)}
+                    <div className="font-bold text-slate-100 text-[13px] truncate">
+                      {fac ? fac.name : 'No nearby facility'}
                       {fac && (
-                        <span className="text-orange-400 ml-1.5">
-                          → {fac.name} ({a.nearestFacility?.distanceKm.toFixed(1)}km)
+                        <span className="text-orange-400 font-normal ml-1.5">
+                          ({a.nearestFacility?.distanceKm.toFixed(1)} km away)
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${classMeta.badgeClass}`}>
-                        {classMeta.emoji} {classMeta.short}
+
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span
+                        title={a.classification?.reasoning}
+                        className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${classMeta.badgeClass}`}
+                      >
+                        {classMeta.emoji} {classMeta.label}
+                        {a.classification && ` · ${a.classification.confidence}%`}
                       </span>
                       {a.classification?.isPersistent && (
-                        <span className="px-1.5 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 text-[9px] font-bold">
+                        <span
+                          title="This spot has shown up as hot across several satellite passes in a row."
+                          className="px-1.5 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 text-[9px] font-bold"
+                        >
                           PERSISTENT
                         </span>
                       )}
-                      {a.classification && (
-                        <span className="text-[9px] text-slate-500">{a.classification.confidence}% conf.</span>
-                      )}
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 truncate mt-1">
+                      {a.satellite} · {a.acq_date} {a.acq_time} · {a.daynight === 'D' ? 'Day' : 'Night'} · Lat {a.latitude.toFixed(2)}, Lon {a.longitude.toFixed(2)}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="text-right">
+                  <div className="text-right" title="Fire Power (FRP): how intense the heat is, in megawatts.">
                     <div className="font-bold text-orange-400">{a.frp.toFixed(0)} MW</div>
                     <div className="text-[10px] text-slate-500">{a.brightness} K</div>
                   </div>
 
                   <span
+                    title="Severity: how urgent this is for the nearest facility."
                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                       threatLevel === 'CRITICAL'
                         ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'

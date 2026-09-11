@@ -385,11 +385,11 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
           </div>
 
           <div class="bg-slate-900/90 p-2 rounded border border-slate-800 my-2">
-            <div class="text-[10px] text-slate-400 uppercase">Target Industrial Asset</div>
+            <div class="text-[10px] text-slate-400 uppercase">Nearest Facility</div>
             <div class="font-bold text-slate-100 text-xs truncate">${targetFac.name}</div>
             <div class="flex items-center justify-between mt-1 text-[11px]">
               <span class="text-rose-400 font-bold">${a.nearestFacility ? `${a.nearestFacility.distanceKm.toFixed(1)} km away` : 'Active Fire Front'}</span>
-              <span class="text-amber-400">${a.nearestFacility ? `ETA: ${a.nearestFacility.timeToImpactHours}h` : 'Real-time Telemetry'}</span>
+              <span class="text-amber-400">${a.nearestFacility ? `Reaches in: ${a.nearestFacility.timeToImpactHours}h` : 'Real-time Telemetry'}</span>
             </div>
           </div>
 
@@ -803,27 +803,27 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
               </div>
 
               <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-center text-xs">
-                <div className="bg-slate-950/70 p-1.5 rounded border border-slate-800">
-                  <div className="text-[9px] text-slate-400 uppercase">FRP</div>
+                <div className="bg-slate-950/70 p-1.5 rounded border border-slate-800" title="Fire Power (FRP): how intense the heat is, in megawatts.">
+                  <div className="text-[9px] text-slate-400 uppercase">Fire Power</div>
                   <div className="font-bold text-orange-400 text-xs">{inspectedAnomaly.frp.toFixed(0)} MW</div>
                 </div>
-                <div className="bg-slate-950/70 p-1.5 rounded border border-slate-800">
+                <div className="bg-slate-950/70 p-1.5 rounded border border-slate-800" title="Satellite-measured surface temperature.">
                   <div className="text-[9px] text-slate-400 uppercase">Brightness</div>
                   <div className="font-bold text-slate-200 text-xs">{inspectedAnomaly.brightness} K</div>
                 </div>
-                <div className="bg-slate-950/70 p-1.5 rounded border border-slate-800">
-                  <div className="text-[9px] text-slate-400 uppercase">Wind Vector</div>
+                <div className="bg-slate-950/70 p-1.5 rounded border border-slate-800" title="Current wind speed near this location.">
+                  <div className="text-[9px] text-slate-400 uppercase">Wind Speed</div>
                   <div className="font-bold text-sky-400 text-xs">{inspectedAnomaly.windSpeedKmh} km/h</div>
                 </div>
               </div>
 
               {inspectedAnomaly.nearestFacility && (
                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-orange-500/20">
-                  <span className="text-slate-300 font-bold">
-                    Perimeter: <strong className="text-rose-400">{inspectedAnomaly.nearestFacility.distanceKm.toFixed(1)} km</strong>
+                  <span className="text-slate-300 font-bold" title="Distance from the fire to the facility.">
+                    Distance: <strong className="text-rose-400">{inspectedAnomaly.nearestFacility.distanceKm.toFixed(1)} km</strong>
                   </span>
-                  <span className="text-amber-300 font-bold">
-                    ETA: {inspectedAnomaly.nearestFacility.timeToImpactHours}h
+                  <span className="text-amber-300 font-bold" title="Estimated time before the fire could reach the facility.">
+                    Time to Reach: {inspectedAnomaly.nearestFacility.timeToImpactHours}h
                   </span>
                 </div>
               )}

@@ -195,19 +195,21 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
             onClick={() => handleSort('distance')}
             className={`cursor-pointer transition-colors flex items-center gap-1 flex-shrink-0 ${sortField === 'distance' ? 'text-orange-400 font-bold' : 'hover:text-slate-200'}`}
           >
-            Dist <ArrowUpDown className="w-3 h-3 inline" />
+            Distance <ArrowUpDown className="w-3 h-3 inline" />
           </button>
           <button
             onClick={() => handleSort('frp')}
+            title="Sort by Fire Power (FRP)"
             className={`cursor-pointer transition-colors flex items-center gap-1 flex-shrink-0 ${sortField === 'frp' ? 'text-orange-400 font-bold' : 'hover:text-slate-200'}`}
           >
-            FRP <ArrowUpDown className="w-3 h-3 inline" />
+            Fire Power <ArrowUpDown className="w-3 h-3 inline" />
           </button>
           <button
             onClick={() => handleSort('timeToImpact')}
+            title="Sort by estimated Time to Reach"
             className={`cursor-pointer transition-colors flex items-center gap-1 flex-shrink-0 ${sortField === 'timeToImpact' ? 'text-orange-400 font-bold' : 'hover:text-slate-200'}`}
           >
-            ETA <ArrowUpDown className="w-3 h-3 inline" />
+            Time to Reach <ArrowUpDown className="w-3 h-3 inline" />
           </button>
         </div>
       </div>
@@ -250,6 +252,7 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
                 <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
                   {/* Risk Score Circle */}
                   <div
+                    title="Threat Score: combines distance, fire strength, wind, and facility danger level into one 0-100 number."
                     className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex flex-col items-center justify-center font-mono font-extrabold flex-shrink-0 border shadow-inner ${
                       level === 'CRITICAL'
                         ? 'bg-rose-950/60 border-rose-600/70 text-rose-400'
@@ -263,9 +266,9 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
                   </div>
 
                   {/* Name and Facility Meta */}
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <span className="font-bold text-slate-100 text-xs sm:text-sm truncate font-mono">
+                      <span className="font-bold text-slate-100 text-sm sm:text-base truncate font-mono">
                         {fac.name}
                       </span>
                       <span
@@ -279,30 +282,36 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
                       >
                         {level}
                       </span>
-                      <span className="text-[10px] sm:text-[11px] text-slate-400 font-mono">
-                        {fac.country} ({fac.region})
-                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       <span
                         title={item.classification?.reasoning}
                         className={`px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-bold border ${classMeta.badgeClass}`}
                       >
-                        {classMeta.emoji} {classMeta.short}
+                        {classMeta.emoji} {classMeta.label}
                         {item.classification && ` · ${item.classification.confidence}%`}
                       </span>
                       {item.classification?.isPersistent && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-bold border border-cyan-500/40 bg-cyan-500/10 text-cyan-400">
+                        <span
+                          title="This spot has shown up as hot across several satellite passes in a row."
+                          className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-bold border border-cyan-500/40 bg-cyan-500/10 text-cyan-400"
+                        >
                           PERSISTENT
                         </span>
                       )}
+                      <span className="text-[10px] sm:text-[11px] text-slate-500 font-mono">
+                        {fac.country} · {fac.region}
+                      </span>
                     </div>
 
                     {/* Stored Chemicals & Responder Unit */}
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 text-[10px] sm:text-[11px] text-slate-400 font-mono">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-slate-400 font-mono">
                       <span className="text-slate-300">
                         📦 {fac.primaryChemicals.slice(0, 3).join(', ')}
                       </span>
                       <span className="hidden xs:inline">•</span>
-                      <span className="text-slate-400">
+                      <span className="text-slate-400" title="Distance around the facility where an explosion could cause serious damage.">
                         Blast Radius: <strong className="text-rose-400">{fac.blastRadiusKm} km</strong>
                       </span>
                       <span className="hidden sm:inline">•</span>
@@ -316,7 +325,7 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
                 {/* Spatial Proximity & Telemetry Metrics + Actions Responsive Row */}
                 <div className="flex items-center justify-between lg:justify-end gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
                   <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono flex-1 sm:flex-shrink-0 bg-slate-900/80 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-800">
-                    <div>
+                    <div title="How far the fire is from the facility right now.">
                       <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Distance</div>
                       <div
                         className={`font-bold text-xs sm:text-sm ${
@@ -329,17 +338,17 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
                       </div>
                     </div>
 
-                    <div className="border-l border-slate-800 pl-2 sm:pl-3">
-                      <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">FRP</div>
+                    <div className="border-l border-slate-800 pl-2 sm:pl-3" title="Fire Power (FRP): how intense the heat is, in megawatts.">
+                      <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Fire Power</div>
                       <div className="font-bold text-orange-400 text-xs sm:text-sm">{item.frp.toFixed(0)} MW</div>
                     </div>
 
-                    <div className="border-l border-slate-800 pl-2 sm:pl-3">
-                      <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">ETA</div>
+                    <div className="border-l border-slate-800 pl-2 sm:pl-3" title="Estimated time before the fire could reach the facility, based on wind speed and direction.">
+                      <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Time to Reach</div>
                       <div className="font-bold text-slate-200 text-xs sm:text-sm">{threat.timeToImpactHours}h</div>
                     </div>
 
-                    <div className="border-l border-slate-800 pl-2 sm:pl-3 hidden md:block">
+                    <div className="border-l border-slate-800 pl-2 sm:pl-3 hidden md:block" title="Direct = wind blowing fire toward the facility. Crosswind = a side breeze. Away = wind blowing it away.">
                       <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Wind</div>
                       <div
                         className={`font-semibold ${

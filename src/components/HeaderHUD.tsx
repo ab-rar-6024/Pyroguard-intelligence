@@ -15,7 +15,8 @@ import {
   Search,
   Satellite,
   RefreshCw,
-  X
+  X,
+  HelpCircle
 } from 'lucide-react';
 import { ThermalAnomaly, EmergencyAlert, FIRMSFeedStatus } from '../types';
 
@@ -32,6 +33,7 @@ interface HeaderHUDProps {
   onOpenFastAPI: () => void;
   onOpenWidgets: () => void;
   onOpenIndiaCommand?: () => void;
+  onOpenGlossary: () => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
   selectedSeverity: string;
@@ -51,6 +53,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   onOpenFastAPI,
   onOpenWidgets,
   onOpenIndiaCommand,
+  onOpenGlossary,
   searchTerm,
   onSearchChange,
   selectedSeverity,
@@ -125,8 +128,9 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full xl:w-auto pb-1 xl:pb-0 scrollbar-thin scrollbar-thumb-slate-800 touch-pan-x">
           
           {/* Critical Red Zone Breaches */}
-          <div 
+          <div
             onClick={() => onSeverityChange(selectedSeverity === 'CRITICAL' ? 'ALL' : 'CRITICAL')}
+            title="Facilities with a fire close enough to be an immediate danger. Click to filter."
             className={`cursor-pointer px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
               criticalThreats.length > 0
                 ? 'bg-rose-950/40 border-rose-600/50 text-rose-300 hover:bg-rose-900/40'
@@ -135,32 +139,36 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
           >
             <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 flex-shrink-0" />
             <div>
-              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Red Zone</div>
+              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Critical Sites</div>
               <div className="text-xs sm:text-sm font-bold font-mono text-rose-400 leading-tight whitespace-nowrap">
-                {criticalThreats.length} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">sites</span>
+                {criticalThreats.length} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">in danger now</span>
               </div>
             </div>
           </div>
 
           {/* High Warning Sites */}
-          <div 
+          <div
             onClick={() => onSeverityChange(selectedSeverity === 'HIGH' ? 'ALL' : 'HIGH')}
+            title="Facilities being watched closely for a nearby fire getting worse. Click to filter."
             className="cursor-pointer px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:border-amber-500/40 transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
           >
             <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 flex-shrink-0" />
             <div>
               <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">High Risk</div>
               <div className="text-xs sm:text-sm font-bold font-mono text-amber-400 leading-tight whitespace-nowrap">
-                {highThreats.length} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">sites</span>
+                {highThreats.length} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">being watched</span>
               </div>
             </div>
           </div>
 
           {/* Total Cumulative FRP */}
-          <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div
+            title="Combined heat output of every fire being tracked right now, in megawatts (MW). A rough gauge of how much is burning overall."
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
+          >
             <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-400 flex-shrink-0" />
             <div>
-              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Total Power</div>
+              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Total Fire Power</div>
               <div className="text-xs sm:text-sm font-bold font-mono text-orange-400 leading-tight whitespace-nowrap">
                 {totalFRP.toLocaleString()} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">MW</span>
               </div>
@@ -168,10 +176,13 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
           </div>
 
           {/* Active Responders Dispatched */}
-          <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div
+            title="Emergency response units currently sent to an incident."
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
+          >
             <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 flex-shrink-0" />
             <div>
-              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Dispatches</div>
+              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Dispatched</div>
               <div className="text-xs sm:text-sm font-bold font-mono text-blue-400 leading-tight whitespace-nowrap">
                 {activeDispatches} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">units</span>
               </div>
@@ -265,6 +276,15 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
               className="p-1.5 sm:p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-slate-100 hover:border-slate-700 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
             >
               <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+
+            {/* Plain-Language Glossary / Help */}
+            <button
+              onClick={onOpenGlossary}
+              title="What do these terms mean?"
+              className="p-1.5 sm:p-2 rounded-lg bg-slate-900 border border-slate-800 text-sky-400 hover:text-sky-300 hover:border-sky-500/40 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>

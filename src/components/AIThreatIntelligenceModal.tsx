@@ -346,19 +346,19 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
                 {facility.primaryChemicals.slice(0, 2).join(', ')}
               </div>
             </div>
-            <div>
-              <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">FRP Radiance</div>
+            <div title="Fire Power (FRP): how intense the heat is, in megawatts.">
+              <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Fire Power</div>
               <div className="font-bold text-orange-400 flex items-center gap-1">
                 <Flame className="w-3 h-3" /> {anomaly.frp} MW
               </div>
             </div>
-            <div>
-              <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Wind Vector</div>
+            <div title="Current wind speed near this location.">
+              <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Wind Speed</div>
               <div className="font-bold text-sky-400 flex items-center gap-1">
                 <Wind className="w-3 h-3" /> {anomaly.windSpeedKmh} km/h
               </div>
             </div>
-            <div>
+            <div title="Distance around the facility where an explosion could cause serious damage.">
               <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase">Blast Zone Base</div>
               <div className="font-bold text-rose-400">{facility.blastRadiusKm} km</div>
             </div>

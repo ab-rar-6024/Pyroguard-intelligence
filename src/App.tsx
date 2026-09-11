@@ -10,6 +10,7 @@ import { GISExportModal } from './components/GISExportModal';
 import { FastAPICodeViewerModal } from './components/FastAPICodeViewerModal';
 import { CustomWidgetDrawer } from './components/CustomWidgetDrawer';
 import { IndiaCommandCenterModal } from './components/IndiaCommandCenterModal';
+import { GlossaryModal } from './components/GlossaryModal';
 import { 
   ThermalAnomaly, 
   IndustrialFacility, 
@@ -42,6 +43,7 @@ export default function App() {
   const [showFastAPIModal, setShowFastAPIModal] = useState(false);
   const [showWidgetsDrawer, setShowWidgetsDrawer] = useState(false);
   const [showIndiaModal, setShowIndiaModal] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -193,6 +195,7 @@ export default function App() {
         setShowExportModal(false);
         setShowFastAPIModal(false);
         setShowWidgetsDrawer(false);
+        setShowGlossary(false);
       } else if (e.key === 'e' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setShowExportModal(true);
@@ -277,6 +280,7 @@ export default function App() {
         onOpenFastAPI={() => setShowFastAPIModal(true)}
         onOpenWidgets={() => setShowWidgetsDrawer(true)}
         onOpenIndiaCommand={() => setShowIndiaModal(true)}
+        onOpenGlossary={() => setShowGlossary(true)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         selectedSeverity={selectedSeverity}
@@ -418,6 +422,11 @@ export default function App() {
             setSelectedAnomaly(null);
           }}
         />
+      )}
+
+      {/* Plain-Language Glossary / Help Modal */}
+      {showGlossary && (
+        <GlossaryModal onClose={() => setShowGlossary(false)} />
       )}
 
       {/* Widget Layout Manager Drawer */}
