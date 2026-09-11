@@ -55,7 +55,7 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
             }`}
           >
             <Radio className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Dispatches ({alerts.length})</span>
+            <span>Simulated Dispatches ({alerts.length})</span>
           </button>
         </div>
 
@@ -141,9 +141,13 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
             );
           })
         ) : (
-          alerts.length === 0 ? (
+          <>
+          <div className="mb-1 px-2 py-1.5 rounded-lg bg-slate-900/60 border border-slate-800 text-[10px] text-slate-500 font-mono">
+            Simulation only — logs a mock dispatch for planning/training. Does not contact any real emergency service.
+          </div>
+          {alerts.length === 0 ? (
             <div className="py-10 text-center text-slate-500 text-xs font-mono">
-              No emergency response units currently dispatched.
+              No simulated dispatches logged yet.
             </div>
           ) : (
             alerts.map((alt) => (
@@ -175,7 +179,7 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
                       className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <CheckCircle2 className="w-3 h-3" />
-                      <span>Acknowledge Dispatch</span>
+                      <span>Mark Acknowledged</span>
                     </button>
                   ) : (
                     <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-bold">
@@ -185,7 +189,8 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
                 </div>
               </div>
             ))
-          )
+          )}
+          </>
         )}
       </div>
 

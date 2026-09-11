@@ -569,10 +569,11 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
             </button>
             <button
               onClick={handleDispatch}
+              title="Simulation only - does not contact any real emergency service."
               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 transition-all cursor-pointer min-h-[40px]"
             >
               <Radio className="w-4 h-4" />
-              <span>Broadcast Tactical Dispatch</span>
+              <span>Simulate Tactical Dispatch</span>
             </button>
           </div>
         </div>

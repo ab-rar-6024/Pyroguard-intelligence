@@ -178,7 +178,7 @@ Immediate satellite-based early warning confirmed active high-intensity thermal 
             { id: 'ndrf', label: '🚨 NDRF / SDRF Battalions', icon: ShieldAlert },
             { id: 'regulations', label: '📜 AERB & OISD Standards', icon: BookOpen },
             { id: 'seasonal', label: '🌾 FSI Stubble & Fire Index', icon: Calendar },
-            { id: 'broadcast', label: '📢 Bilingual Alert Dispatch', icon: Radio },
+            { id: 'broadcast', label: '📢 Bilingual Alert Draft', icon: Radio },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -413,9 +413,10 @@ Immediate satellite-based early warning confirmed active high-intensity thermal 
                             setSelectedFacilityForBroadcast(fac);
                             setActiveTab('broadcast');
                           }}
+                          title="Simulation only - does not contact any real emergency service."
                           className="px-3 py-1.5 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/40 text-orange-400 text-xs font-mono font-semibold transition-colors cursor-pointer"
                         >
-                          Dispatch Alert
+                          Simulate Dispatch
                         </button>
                       </div>
                     </div>

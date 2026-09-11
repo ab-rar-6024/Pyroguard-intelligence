@@ -387,10 +387,11 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
 
                     <button
                       onClick={() => onTriggerDispatch(item, fac)}
+                      title="Simulation only - logs a mock dispatch, does not contact any real emergency service."
                       className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs font-mono shadow-md shadow-rose-950/40 transition-all cursor-pointer min-h-[36px]"
                     >
                       <Radio className="w-3.5 h-3.5" />
-                      <span>Dispatch</span>
+                      <span>Simulate Dispatch</span>
                     </button>
                   </div>
                 </div>

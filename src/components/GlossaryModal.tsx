@@ -48,6 +48,10 @@ const TERMS: { term: string; plain: string; detail?: string }[] = [
     plain: 'This exact spot has shown up as "hot" across several satellite passes in a row — more likely a continuous source like a gas flare than a one-off fire.'
   },
   {
+    term: 'Simulate Dispatch',
+    plain: 'A planning/training exercise, not a real emergency action. Clicking it logs a mock responder assignment inside this app only — it does not call, text, or notify any real fire department or emergency service.'
+  },
+  {
     term: 'Confidence %',
     plain: 'How sure the system is about its classification of a hotspot — not how dangerous it is.'
   },

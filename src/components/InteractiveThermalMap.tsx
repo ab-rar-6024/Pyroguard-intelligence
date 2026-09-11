@@ -422,8 +422,8 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
           </div>
 
           <div class="flex gap-2 mt-2">
-            <button id="btn-dispatch-${a.id}" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-1.5 px-2 rounded text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer">
-              🚨 Dispatch
+            <button id="btn-dispatch-${a.id}" title="Simulation only - does not contact any real emergency service." class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-1.5 px-2 rounded text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer">
+              🚨 Simulate Dispatch
             </button>
             <button id="btn-advisor-${a.id}" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold py-1.5 px-2 rounded text-[10px] flex items-center justify-center gap-1 border border-slate-700 transition-colors cursor-pointer">
               🧠 AI Evac
@@ -925,10 +925,11 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
                 <>
                   <button
                     onClick={() => onTriggerDispatch(inspectedAnomaly, inspectedFacility)}
+                    title="Simulation only - does not contact any real emergency service."
                     className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-950/50 transition-all cursor-pointer min-h-[36px]"
                   >
                     <Radio className="w-3.5 h-3.5" />
-                    <span>Dispatch</span>
+                    <span>Simulate Dispatch</span>
                   </button>
 
                   <button

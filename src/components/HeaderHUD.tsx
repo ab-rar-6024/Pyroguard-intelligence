@@ -131,14 +131,14 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
             </div>
           </div>
 
-          {/* Active Responders Dispatched */}
+          {/* Simulated Responders Dispatched */}
           <div
-            title="Emergency response units currently sent to an incident."
+            title="This is a planning/training simulation - it does not contact any real emergency service."
             className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
           >
             <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 flex-shrink-0" />
             <div>
-              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Dispatched</div>
+              <div className="text-[9px] sm:text-[10px] uppercase font-mono text-slate-400 leading-tight whitespace-nowrap">Simulated Dispatch</div>
               <div className="text-xs sm:text-sm font-bold font-mono text-blue-400 leading-tight whitespace-nowrap">
                 {activeDispatches} <span className="text-[9px] sm:text-[10px] font-normal text-slate-400">units</span>
               </div>
