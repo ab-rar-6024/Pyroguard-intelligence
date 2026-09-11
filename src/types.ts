@@ -110,7 +110,6 @@ export interface NotificationThresholds {
   minFrpMW: number;
   minRiskScore: number;
   autoDispatchEnabled: boolean;
-  soundAlarmEnabled: boolean;
   browserPushEnabled: boolean;
   repeatAlertIntervalMinutes: number;
 }

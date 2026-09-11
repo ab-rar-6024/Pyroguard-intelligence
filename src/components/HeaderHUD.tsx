@@ -1,33 +1,23 @@
 import React from 'react';
-import { 
-  Flame, 
-  AlertTriangle, 
-  ShieldAlert, 
-  Radio, 
-  Volume2, 
-  VolumeX, 
-  Settings, 
-  Download, 
-  Code2, 
-  Layers, 
-  Activity,
+import {
+  Flame,
+  AlertTriangle,
+  ShieldAlert,
+  Radio,
+  Settings,
+  Download,
+  Code2,
+  Layers,
   Zap,
   Search,
-  Satellite,
-  RefreshCw,
   X,
   HelpCircle
 } from 'lucide-react';
-import { ThermalAnomaly, EmergencyAlert, FIRMSFeedStatus } from '../types';
+import { ThermalAnomaly, EmergencyAlert } from '../types';
 
 interface HeaderHUDProps {
   anomalies: ThermalAnomaly[];
   alerts: EmergencyAlert[];
-  firmsStatus?: FIRMSFeedStatus | null;
-  isRefreshingSatellites?: boolean;
-  onRefreshSatellites?: () => void;
-  soundEnabled: boolean;
-  onToggleSound: () => void;
   onOpenThresholds: () => void;
   onOpenExport: () => void;
   onOpenFastAPI: () => void;
@@ -43,11 +33,6 @@ interface HeaderHUDProps {
 export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   anomalies,
   alerts,
-  firmsStatus,
-  isRefreshingSatellites,
-  onRefreshSatellites,
-  soundEnabled,
-  onToggleSound,
   onOpenThresholds,
   onOpenExport,
   onOpenFastAPI,
@@ -93,35 +78,6 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
             </div>
           </div>
 
-          {/* NASA Satellite Live Feed Status Pill & Manual Sync Button */}
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-            <div 
-              onClick={onOpenThresholds}
-              title="Click to view NASA FIRMS Satellite Feed configuration"
-              className="cursor-pointer flex items-center gap-1.5 px-2 sm:px-2.5 py-1 bg-emerald-950/40 rounded-md border border-emerald-500/40 text-[10px] sm:text-[11px] font-mono text-emerald-400 hover:bg-emerald-900/40 transition-colors"
-            >
-              <Satellite className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 flex-shrink-0" />
-              <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-emerald-500"></span>
-              </span>
-              <span className="hidden sm:inline">NASA FIRMS:</span>
-              <span className="font-bold text-emerald-300">
-                {firmsStatus?.isRealData ? 'LIVE' : 'SYNCED'}
-              </span>
-            </div>
-
-            {onRefreshSatellites && (
-              <button
-                onClick={onRefreshSatellites}
-                disabled={isRefreshingSatellites}
-                title="Scan latest NASA FIRMS satellite passes"
-                className="p-1 sm:p-1.5 rounded-md bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all disabled:opacity-50 cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingSatellites ? 'animate-spin text-emerald-400' : ''}`} />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Tactical HUD Telemetry Metrics (Responsive Horizontal Scroll / Flex) */}
@@ -214,19 +170,6 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Audio Siren Toggle */}
-            <button
-              onClick={onToggleSound}
-              title={soundEnabled ? 'Acoustic Siren Enabled' : 'Acoustic Siren Muted'}
-              className={`p-1.5 sm:p-2 rounded-lg border transition-all min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer ${
-                soundEnabled
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                  : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            </button>
-
             {/* India Command Center Dedicated Button */}
             {onOpenIndiaCommand && (
               <button

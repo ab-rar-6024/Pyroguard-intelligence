@@ -16,19 +16,15 @@ import {
   IndustrialFacility, 
   EmergencyAlert, 
   NotificationThresholds, 
-  GISLayerConfig, 
-  WidgetVisibilityState,
-  FIRMSFeedStatus
+  GISLayerConfig,
+  WidgetVisibilityState
 } from './types';
-import { playEmergencySiren, playDispatchChirp, playRadarPing } from './utils/audioAlert';
 
 export default function App() {
   // State
   const [anomalies, setAnomalies] = useState<ThermalAnomaly[]>([]);
   const [facilities, setFacilities] = useState<IndustrialFacility[]>([]);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
-  const [firmsStatus, setFirmsStatus] = useState<FIRMSFeedStatus | null>(null);
-  const [isRefreshingSatellites, setIsRefreshingSatellites] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Selection
@@ -51,16 +47,12 @@ export default function App() {
   const [selectedSeverity, setSelectedSeverity] = useState('ALL');
   const [selectedClassification, setSelectedClassification] = useState('ALL');
 
-  // Audio Siren
-  const [soundEnabled, setSoundEnabled] = useState(true);
-
   // Thresholds Configuration
   const [thresholds, setThresholds] = useState<NotificationThresholds>({
     maxDistanceKm: 3.5,
     minFrpMW: 30,
     minRiskScore: 65,
     autoDispatchEnabled: true,
-    soundAlarmEnabled: true,
     browserPushEnabled: false,
     repeatAlertIntervalMinutes: 10,
   });
@@ -92,7 +84,7 @@ export default function App() {
   });
 
   // Fetch initial telemetry
-  const fetchData = useCallback(async (isBackground = false) => {
+  const fetchData = useCallback(async () => {
     try {
       const [thermalRes, facRes, alertRes] = await Promise.all([
         fetch('/api/thermal/live'),
@@ -108,9 +100,6 @@ export default function App() {
 
       if (thermalData.success) {
         setAnomalies(thermalData.data);
-        if (thermalData.firmsStatus) {
-          setFirmsStatus(thermalData.firmsStatus);
-        }
       }
       if (facData.success) {
         setFacilities(facData.data);
@@ -119,9 +108,6 @@ export default function App() {
         setAlerts(alertData.data);
       }
 
-      if (isBackground) {
-        playRadarPing();
-      }
     } catch (err) {
       console.error('Error fetching live telemetry:', err);
     } finally {
@@ -130,30 +116,23 @@ export default function App() {
   }, []);
 
   const handleRefreshSatellites = async () => {
-    setIsRefreshingSatellites(true);
     try {
-      const res = await fetch('/api/thermal/refresh', { method: 'POST' });
-      const data = await res.json();
-      if (data.status) {
-        setFirmsStatus(data.status);
-      }
-      await fetchData(true);
+      await fetch('/api/thermal/refresh', { method: 'POST' });
+      await fetchData();
     } catch (e) {
       console.error('Refresh satellites error:', e);
-    } finally {
-      setIsRefreshingSatellites(false);
     }
   };
 
   useEffect(() => {
-    fetchData(false);
+    fetchData();
     const interval = setInterval(() => {
-      fetchData(true);
+      fetchData();
     }, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Monitor thresholds for automatic alerts & emergency responder triggers
+  // Monitor thresholds for automatic browser-notification alerts
   useEffect(() => {
     if (anomalies.length === 0 || facilities.length === 0) return;
 
@@ -166,25 +145,20 @@ export default function App() {
         a.nearestFacility.threatScore >= thresholds.minRiskScore
     );
 
-    if (criticalHotspots.length > 0 && thresholds.soundAlarmEnabled && soundEnabled) {
-      // Play procedural warning siren
-      playEmergencySiren();
-
-      // Trigger browser notification if permitted
-      if (
-        thresholds.browserPushEnabled &&
-        typeof window !== 'undefined' &&
-        'Notification' in window &&
-        Notification.permission === 'granted'
-      ) {
-        const topThreat = criticalHotspots[0];
-        new Notification(`🚨 PYROGUARD CRITICAL THREAT: ${topThreat.nearestFacility?.facility.name}`, {
-          body: `Thermal anomaly detected ${topThreat.nearestFacility?.distanceKm.toFixed(1)} km away (${topThreat.frp} MW). High ignition risk!`,
-          icon: '/favicon.ico',
-        });
-      }
+    if (
+      criticalHotspots.length > 0 &&
+      thresholds.browserPushEnabled &&
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'granted'
+    ) {
+      const topThreat = criticalHotspots[0];
+      new Notification(`🚨 PYROGUARD CRITICAL THREAT: ${topThreat.nearestFacility?.facility.name}`, {
+        body: `Thermal anomaly detected ${topThreat.nearestFacility?.distanceKm.toFixed(1)} km away (${topThreat.frp} MW). High ignition risk!`,
+        icon: '/favicon.ico',
+      });
     }
-  }, [anomalies, facilities, thresholds, soundEnabled]);
+  }, [anomalies, facilities, thresholds]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -226,7 +200,6 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.alert) {
         setAlerts((prev) => [data.alert, ...prev]);
-        playDispatchChirp();
       }
     } catch (err) {
       console.error('Dispatch trigger error:', err);
@@ -270,11 +243,6 @@ export default function App() {
       <HeaderHUD
         anomalies={anomalies}
         alerts={alerts}
-        firmsStatus={firmsStatus}
-        isRefreshingSatellites={isRefreshingSatellites}
-        onRefreshSatellites={handleRefreshSatellites}
-        soundEnabled={soundEnabled}
-        onToggleSound={() => setSoundEnabled(!soundEnabled)}
         onOpenThresholds={() => setShowThresholdsModal(true)}
         onOpenExport={() => setShowExportModal(true)}
         onOpenFastAPI={() => setShowFastAPIModal(true)}
