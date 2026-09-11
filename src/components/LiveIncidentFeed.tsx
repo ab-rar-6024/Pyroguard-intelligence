@@ -11,6 +11,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { ThermalAnomaly, EmergencyAlert } from '../types';
+import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
 interface LiveIncidentFeedProps {
   anomalies: ThermalAnomaly[];
@@ -70,6 +71,7 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
           anomalies.map((a) => {
             const fac = a.nearestFacility?.facility;
             const threatLevel = a.nearestFacility?.threatLevel || 'WATCH';
+            const classMeta = CLASSIFICATION_META[a.classification?.classification || 'UNKNOWN'];
 
             return (
               <div
@@ -99,6 +101,19 @@ export const LiveIncidentFeed: React.FC<LiveIncidentFeedProps> = ({
                         <span className="text-orange-400 ml-1.5">
                           → {fac.name} ({a.nearestFacility?.distanceKm.toFixed(1)}km)
                         </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${classMeta.badgeClass}`}>
+                        {classMeta.emoji} {classMeta.short}
+                      </span>
+                      {a.classification?.isPersistent && (
+                        <span className="px-1.5 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 text-[9px] font-bold">
+                          PERSISTENT
+                        </span>
+                      )}
+                      {a.classification && (
+                        <span className="text-[9px] text-slate-500">{a.classification.confidence}% conf.</span>
                       )}
                     </div>
                   </div>

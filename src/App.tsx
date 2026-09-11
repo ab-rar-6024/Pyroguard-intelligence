@@ -47,6 +47,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSector, setSelectedSector] = useState('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState('ALL');
+  const [selectedClassification, setSelectedClassification] = useState('ALL');
 
   // Audio Siren
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -342,15 +343,18 @@ export default function App() {
             onSectorChange={setSelectedSector}
             selectedSeverity={selectedSeverity}
             onSeverityChange={setSelectedSeverity}
+            selectedClassification={selectedClassification}
+            onClassificationChange={setSelectedClassification}
           />
         )}
 
         {/* Bottom Section: Real-time Analytics & Fire Power Histograms */}
         {widgets.frpChart && (
-          <AnalyticsCharts 
-            anomalies={filteredAnomalies} 
+          <AnalyticsCharts
+            anomalies={filteredAnomalies}
             onSelectSector={setSelectedSector}
             onSelectAnomaly={setSelectedAnomaly}
+            onSelectClassification={setSelectedClassification}
           />
         )}
 

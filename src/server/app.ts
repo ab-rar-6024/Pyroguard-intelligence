@@ -1,12 +1,13 @@
 import express, { Request, Response } from 'express';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore, exportToGeoJSON, exportToCSV } from '../utils/gisCalculations.js';
-import { ThermalAnomaly, EmergencyAlert } from '../types.js';
+import { ThermalAnomaly, EmergencyAlert, LandCoverType } from '../types.js';
 import {
   fetchLiveFIRMSHotspots,
   getFIRMSStatus,
   setNasaFirmsKey
 } from '../utils/nasaFirmsService.js';
+import { classifyThermalAnomaly } from '../utils/fireClassification.js';
 
 // In-memory store for real-time alerts and satellite anomalies.
 // NOTE: on serverless platforms (e.g. Vercel) this only persists for the
@@ -102,20 +103,29 @@ function generateBaselineHotspots(): ThermalAnomaly[] {
           threatLevel: threat.severity,
           timeToImpactHours: threat.timeToImpactHours,
           windSpreadRisk: windEval.riskType
-        }
+        },
+        classification: classifyThermalAnomaly({
+          distanceKm: distance,
+          facilityType: facility.type,
+          facilityName: facility.name,
+          frp: off.baseFrp,
+          isPersistent: subIdx === 0,
+          occurrences: subIdx === 0 ? 3 : 1,
+          landCover: 'unknown'
+        })
       });
     });
   });
 
-  const ambientHotspots = [
-    { lat: 53.5461, lon: -113.4938, name: 'Alberta Boreal Firefront', frp: 140 },
-    { lat: 38.8951, lon: -122.5364, name: 'Northern California Complex', frp: 210 },
-    { lat: -12.9714, lon: -55.9876, name: 'Mato Grosso Cerrado Fire', frp: 165 },
-    { lat: -33.8688, lon: 150.2093, name: 'Blue Mountains Bushfire', frp: 195 },
-    { lat: 37.9838, lon: 23.7275, name: 'Attica Regional Wildfire', frp: 85 },
-    { lat: 62.0397, lon: 129.7422, name: 'Yakutia Taiga Anomaly', frp: 310 },
-    { lat: 43.6532, lon: -116.2035, name: 'Boise National Forest Scrub Fire', frp: 75 },
-    { lat: 21.1702, lon: 72.8311, name: 'Surat Coastal Scrub Hotspot', frp: 55 }
+  const ambientHotspots: { lat: number; lon: number; name: string; frp: number; landCover: LandCoverType }[] = [
+    { lat: 53.5461, lon: -113.4938, name: 'Alberta Boreal Firefront', frp: 140, landCover: 'forest' },
+    { lat: 38.8951, lon: -122.5364, name: 'Northern California Complex', frp: 210, landCover: 'forest' },
+    { lat: -12.9714, lon: -55.9876, name: 'Mato Grosso Cerrado Fire', frp: 165, landCover: 'forest' },
+    { lat: -33.8688, lon: 150.2093, name: 'Blue Mountains Bushfire', frp: 195, landCover: 'forest' },
+    { lat: 37.9838, lon: 23.7275, name: 'Attica Regional Wildfire', frp: 85, landCover: 'forest' },
+    { lat: 62.0397, lon: 129.7422, name: 'Yakutia Taiga Anomaly', frp: 310, landCover: 'forest' },
+    { lat: 43.6532, lon: -116.2035, name: 'Boise National Forest Scrub Fire', frp: 75, landCover: 'forest' },
+    { lat: 21.1702, lon: 72.8311, name: 'Surat Coastal Scrub Hotspot', frp: 55, landCover: 'farmland' }
   ];
 
   ambientHotspots.forEach((amb, i) => {
@@ -157,7 +167,16 @@ function generateBaselineHotspots(): ThermalAnomaly[] {
         threatLevel: threat.severity,
         timeToImpactHours: threat.timeToImpactHours,
         windSpreadRisk: windEval.riskType
-      }
+      },
+      classification: classifyThermalAnomaly({
+        distanceKm: minD,
+        facilityType: closestFac.type,
+        facilityName: closestFac.name,
+        frp: amb.frp,
+        isPersistent: false,
+        occurrences: 1,
+        landCover: amb.landCover
+      })
     });
   });
 
@@ -258,7 +277,7 @@ export function createApp() {
   // GET /api/thermal/live - Return all live FIRMS thermal anomalies
   app.get('/api/thermal/live', async (req: Request, res: Response) => {
     await ensureFreshData();
-    const { minFRP, severity, sector } = req.query;
+    const { minFRP, severity, sector, classification } = req.query;
     const status = getFIRMSStatus();
 
     let filtered = [...cachedAnomalies];
@@ -271,6 +290,9 @@ export function createApp() {
     }
     if (sector && sector !== 'ALL') {
       filtered = filtered.filter(a => a.nearestFacility?.facility.type === sector);
+    }
+    if (classification && classification !== 'ALL') {
+      filtered = filtered.filter(a => a.classification?.classification === classification);
     }
 
     res.json({
@@ -374,6 +396,9 @@ export function createApp() {
         windSpeedKmh,
         windDirectionDeg,
         blastRadiusKm,
+        classification,
+        classificationConfidence,
+        isPersistentSource,
         provider = 'groq',
         model,
         customApiKey
@@ -437,7 +462,8 @@ Stored Hazardous Chemicals: ${chemicalList}
 Distance to NASA FIRMS Hotspot: ${distanceKm} km
 Fire Radiative Power (FRP): ${frpMW} MW
 Wind Speed & Bearing: ${windSpeedKmh} km/h from ${windDirectionDeg}°
-Structural Blast Radius: ${calculatedRadius} km`;
+Structural Blast Radius: ${calculatedRadius} km${classification ? `
+AI Classification: ${classification} (${classificationConfidence}% confidence)${isPersistentSource ? ' - flagged as a PERSISTENT thermal source recurring across multiple satellite passes' : ''}` : ''}`;
 
         let generatedReport = null;
         let usedModel = uniqueModels[0];

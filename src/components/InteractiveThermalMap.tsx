@@ -24,6 +24,7 @@ import {
   Satellite
 } from 'lucide-react';
 import { ThermalAnomaly, IndustrialFacility, GISLayerConfig } from '../types';
+import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
 interface InteractiveThermalMapProps {
   anomalies: ThermalAnomaly[];
@@ -343,6 +344,8 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
           status: 'NORMAL' as any
         };
 
+        const classMeta = CLASSIFICATION_META[a.classification?.classification || 'UNKNOWN'];
+
         const popupContent = document.createElement('div');
         popupContent.className = 'tactical-popup font-mono text-xs text-slate-100 p-2 min-w-[260px]';
         popupContent.innerHTML = `
@@ -355,6 +358,11 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
               threat === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
               'bg-slate-800 text-slate-300'
             }">${threat}</span>
+          </div>
+
+          <div class="flex items-center gap-1.5 mt-1.5" title="${a.classification?.reasoning ? a.classification.reasoning.replace(/"/g, '&quot;') : ''}">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${classMeta.badgeClass}">${classMeta.emoji} ${classMeta.label}${a.classification ? ` · ${a.classification.confidence}%` : ''}</span>
+            ${a.classification?.isPersistent ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/40">PERSISTENT</span>' : ''}
           </div>
 
           <div class="grid grid-cols-2 gap-2 my-2 text-[11px]">
@@ -817,6 +825,22 @@ export const InteractiveThermalMap: React.FC<InteractiveThermalMapProps> = ({
                   <span className="text-amber-300 font-bold">
                     ETA: {inspectedAnomaly.nearestFacility.timeToImpactHours}h
                   </span>
+                </div>
+              )}
+
+              {inspectedAnomaly.classification && (
+                <div
+                  className="flex items-center gap-1.5 pt-1 border-t border-orange-500/20"
+                  title={inspectedAnomaly.classification.reasoning}
+                >
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${CLASSIFICATION_META[inspectedAnomaly.classification.classification].badgeClass}`}>
+                    {CLASSIFICATION_META[inspectedAnomaly.classification.classification].emoji} {CLASSIFICATION_META[inspectedAnomaly.classification.classification].label} · {inspectedAnomaly.classification.confidence}%
+                  </span>
+                  {inspectedAnomaly.classification.isPersistent && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/40">
+                      PERSISTENT ({inspectedAnomaly.classification.occurrences}x)
+                    </span>
+                  )}
                 </div>
               )}
             </div>

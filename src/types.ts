@@ -1,5 +1,30 @@
 export type AnomalySeverity = 'CRITICAL' | 'HIGH' | 'ELEVATED' | 'WATCH';
 
+// AI/rule-based classification of what kind of thermal source a hotspot is,
+// distinguishing industrial activity from natural/agricultural fires per
+// SIH PS 26162 (industrial fires vs forest fires vs other natural fires).
+export type FireClassification =
+  | 'INDUSTRIAL_FIRE'
+  | 'GAS_FLARE'
+  | 'MINING_THERMAL'
+  | 'WILDFIRE'
+  | 'AGRICULTURAL_BURN'
+  | 'UNKNOWN';
+
+// Land-cover context sourced from OpenStreetMap (Overpass API) used as a
+// classification signal for hotspots with no nearby known facility.
+export type LandCoverType = 'forest' | 'farmland' | 'industrial' | 'urban' | 'unknown';
+
+export interface ThermalClassification {
+  classification: FireClassification;
+  confidence: number; // 0-100
+  reasoning: string;
+  isPersistent: boolean;
+  occurrences: number;
+  firstSeenAt?: string;
+  landCover: LandCoverType;
+}
+
 export type IndustryType =
   | 'oil_refinery'
   | 'petrol_bunk_hub'
@@ -60,6 +85,7 @@ export interface ThermalAnomaly {
     timeToImpactHours: number;
     windSpreadRisk: 'DIRECT' | 'CROSSWIND' | 'AWAY' | 'STAGNANT';
   };
+  classification?: ThermalClassification;
 }
 
 export interface EmergencyAlert {

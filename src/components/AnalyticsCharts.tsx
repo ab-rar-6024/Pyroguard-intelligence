@@ -13,21 +13,33 @@ import {
   Scatter, 
   ZAxis 
 } from 'recharts';
-import { BarChart3, PieChart as PieIcon, Activity, Flame, MousePointerClick } from 'lucide-react';
-import { ThermalAnomaly } from '../types';
+import { BarChart3, PieChart as PieIcon, Activity, Flame, MousePointerClick, ShieldQuestion } from 'lucide-react';
+import { ThermalAnomaly, FireClassification } from '../types';
+import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
 interface AnalyticsChartsProps {
   anomalies: ThermalAnomaly[];
   onSelectSector?: (sector: string) => void;
   onSelectAnomaly?: (anomaly: ThermalAnomaly) => void;
+  onSelectClassification?: (classification: string) => void;
 }
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#38bdf8', '#a855f7', '#10b981'];
 
-export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ 
-  anomalies, 
+const CLASSIFICATION_COLORS: Record<FireClassification, string> = {
+  INDUSTRIAL_FIRE: '#fb7185',
+  GAS_FLARE: '#fbbf24',
+  MINING_THERMAL: '#fb923c',
+  WILDFIRE: '#34d399',
+  AGRICULTURAL_BURN: '#facc15',
+  UNKNOWN: '#64748b',
+};
+
+export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
+  anomalies,
   onSelectSector,
-  onSelectAnomaly 
+  onSelectAnomaly,
+  onSelectClassification
 }) => {
   // 1. Sector Threat Breakdown
   const sectorCountMap: Record<string, { count: number; rawType: string }> = {};
@@ -73,6 +85,20 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
     else if (a.frp < 200) frpRanges[3].count++;
     else frpRanges[4].count++;
   });
+
+  // 2b. AI Fire Classification Breakdown (industrial fire vs wildfire vs
+  // agricultural burn vs mining vs gas flare vs unclassified)
+  const classificationCountMap: Record<string, number> = {};
+  anomalies.forEach((a) => {
+    const cls = a.classification?.classification || 'UNKNOWN';
+    classificationCountMap[cls] = (classificationCountMap[cls] || 0) + 1;
+  });
+  const classificationData = Object.entries(classificationCountMap).map(([cls, count]) => ({
+    name: CLASSIFICATION_META[cls as FireClassification].label,
+    rawClassification: cls,
+    value: count,
+  }));
+  const persistentCount = anomalies.filter((a) => a.classification?.isPersistent).length;
 
   // 3. Proximity Scatter Data (Distance vs FRP)
   const scatterData = anomalies
@@ -152,6 +178,56 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
               >
                 {sectorData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#020617',
+                  borderColor: '#334155',
+                  borderRadius: '8px',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* 2c. AI Fire Classification Breakdown */}
+      <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-xl flex flex-col">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2 sm:mb-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <ShieldQuestion className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 flex-shrink-0" />
+            <h3 className="text-xs font-bold font-mono uppercase text-slate-200">
+              AI Fire Classification
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400">
+            {persistentCount > 0 ? `${persistentCount} persistent` : 'Click to filter'}
+          </span>
+        </div>
+
+        <div className="h-40 sm:h-44 w-full flex items-center justify-center">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={classificationData}
+                cx="50%"
+                cy="50%"
+                innerRadius={32}
+                outerRadius={62}
+                paddingAngle={4}
+                dataKey="value"
+                cursor="pointer"
+                onClick={(entry: any) => {
+                  if (onSelectClassification && entry && entry.rawClassification) {
+                    onSelectClassification(entry.rawClassification);
+                  }
+                }}
+              >
+                {classificationData.map((entry, index) => (
+                  <Cell key={`cls-cell-${index}`} fill={CLASSIFICATION_COLORS[entry.rawClassification as FireClassification]} />
                 ))}
               </Pie>
               <Tooltip

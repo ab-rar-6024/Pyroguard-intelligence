@@ -14,6 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { ThermalAnomaly, IndustrialFacility, AnomalySeverity, IndustryType } from '../types';
+import { CLASSIFICATION_META, CLASSIFICATION_OPTIONS } from '../utils/classificationDisplay';
 
 interface ThreatMatrixWidgetProps {
   anomalies: ThermalAnomaly[];
@@ -25,6 +26,8 @@ interface ThreatMatrixWidgetProps {
   onSectorChange: (sector: string) => void;
   selectedSeverity: string;
   onSeverityChange: (severity: string) => void;
+  selectedClassification: string;
+  onClassificationChange: (classification: string) => void;
 }
 
 type SortField = 'threatScore' | 'distance' | 'frp' | 'timeToImpact';
@@ -39,6 +42,8 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
   onSectorChange,
   selectedSeverity,
   onSeverityChange,
+  selectedClassification,
+  onClassificationChange,
 }) => {
   const [sortField, setSortField] = useState<SortField>('threatScore');
   const [sortAsc, setSortAsc] = useState(false);
@@ -58,6 +63,11 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
   // Severity filter
   if (selectedSeverity !== 'ALL') {
     threatList = threatList.filter((a) => a.nearestFacility?.threatLevel === selectedSeverity);
+  }
+
+  // Fire classification filter
+  if (selectedClassification !== 'ALL') {
+    threatList = threatList.filter((a) => a.classification?.classification === selectedClassification);
   }
 
   // Sorting
@@ -154,6 +164,19 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
               </option>
             ))}
           </select>
+
+          <select
+            value={selectedClassification}
+            onChange={(e) => onClassificationChange(e.target.value)}
+            title="Filter by AI Fire Classification"
+            className="flex-1 sm:flex-initial bg-slate-900 border border-slate-800 text-slate-300 text-[11px] sm:text-xs font-mono rounded-lg px-2 sm:px-2.5 py-1.5 focus:outline-none focus:border-orange-500"
+          >
+            {CLASSIFICATION_OPTIONS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -194,11 +217,12 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
         {threatList.length === 0 ? (
           <div className="py-12 text-center text-slate-500 font-mono text-xs flex flex-col items-center gap-3">
             <span>No thermal anomaly breaches detected for the selected filters.</span>
-            {(selectedSector !== 'ALL' || selectedSeverity !== 'ALL') && (
+            {(selectedSector !== 'ALL' || selectedSeverity !== 'ALL' || selectedClassification !== 'ALL') && (
               <button
                 onClick={() => {
                   onSectorChange('ALL');
                   onSeverityChange('ALL');
+                  onClassificationChange('ALL');
                 }}
                 className="px-3 py-1.5 rounded-lg bg-orange-600/20 text-orange-400 border border-orange-500/40 hover:bg-orange-600/30 text-xs font-mono cursor-pointer transition-colors"
               >
@@ -211,6 +235,7 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
             const fac = item.nearestFacility!.facility;
             const threat = item.nearestFacility!;
             const level = threat.threatLevel;
+            const classMeta = CLASSIFICATION_META[item.classification?.classification || 'UNKNOWN'];
 
             return (
               <div
@@ -257,6 +282,18 @@ export const ThreatMatrixWidget: React.FC<ThreatMatrixWidgetProps> = ({
                       <span className="text-[10px] sm:text-[11px] text-slate-400 font-mono">
                         {fac.country} ({fac.region})
                       </span>
+                      <span
+                        title={item.classification?.reasoning}
+                        className={`px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-bold border ${classMeta.badgeClass}`}
+                      >
+                        {classMeta.emoji} {classMeta.short}
+                        {item.classification && ` · ${item.classification.confidence}%`}
+                      </span>
+                      {item.classification?.isPersistent && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-bold border border-cyan-500/40 bg-cyan-500/10 text-cyan-400">
+                          PERSISTENT
+                        </span>
+                      )}
                     </div>
 
                     {/* Stored Chemicals & Responder Unit */}

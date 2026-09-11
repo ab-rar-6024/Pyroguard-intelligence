@@ -135,6 +135,11 @@ export function exportToGeoJSON(anomalies: ThermalAnomaly[], facilities: Industr
         threat_score: a.nearestFacility?.threatScore || 0,
         nearest_facility_name: a.nearestFacility?.facility.name || 'None',
         distance_to_facility_km: a.nearestFacility?.distanceKm || null,
+        fire_classification: a.classification?.classification || 'UNKNOWN',
+        classification_confidence: a.classification?.confidence ?? null,
+        classification_reasoning: a.classification?.reasoning || null,
+        is_persistent_source: a.classification?.isPersistent ?? false,
+        land_cover: a.classification?.landCover || 'unknown',
       },
     });
   });
@@ -201,7 +206,11 @@ export function exportToCSV(anomalies: ThermalAnomaly[]): string {
     'Calculated_Threat_Score',
     'Severity_Level',
     'Estimated_Time_to_Impact_Hrs',
-    'Wind_Spread_Risk'
+    'Wind_Spread_Risk',
+    'Fire_Classification',
+    'Classification_Confidence_Pct',
+    'Is_Persistent_Source',
+    'Land_Cover'
   ];
 
   const rows = anomalies.map((a) => {
@@ -228,6 +237,10 @@ export function exportToCSV(anomalies: ThermalAnomaly[]): string {
       `"${a.nearestFacility?.threatLevel || 'WATCH'}"`,
       a.nearestFacility?.timeToImpactHours ?? 'N/A',
       `"${a.nearestFacility?.windSpreadRisk || 'N/A'}"`,
+      `"${a.classification?.classification || 'UNKNOWN'}"`,
+      a.classification?.confidence ?? 'N/A',
+      a.classification?.isPersistent ? 'TRUE' : 'FALSE',
+      `"${a.classification?.landCover || 'unknown'}"`,
     ].join(',');
   });
 

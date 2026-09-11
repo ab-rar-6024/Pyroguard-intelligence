@@ -1,6 +1,55 @@
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore } from './gisCalculations.js';
 import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } from '../types.js';
+import { recordDetection, pruneStaleCells } from './persistenceTracker.js';
+import { batchQueryLandCover } from './landCoverService.js';
+import { classifyThermalAnomaly } from './fireClassification.js';
+
+// Cap on far-field (no nearby facility) hotspots queried against OSM per
+// refresh cycle, to keep the public Overpass endpoint call volume bounded.
+// Kept small and bounded: the public Overpass API has no SLA and is
+// frequently slow, so this caps worst-case added latency per refresh to
+// roughly (MAX_LAND_COVER_LOOKUPS / concurrency) * per-request timeout.
+const MAX_LAND_COVER_LOOKUPS = 16;
+const LAND_COVER_CONCURRENCY = 4;
+const NEAR_FACILITY_KM = 20;
+
+// Attaches persistence + classification data to a curated batch of
+// anomalies. Runs after curation/sampling so this only ever processes the
+// few hundred hotspots actually surfaced to the UI, not every raw detection.
+async function classifyHotspots(hotspots: ThermalAnomaly[]): Promise<void> {
+  pruneStaleCells();
+
+  const persistenceByAnomaly = hotspots.map(a => recordDetection(a.latitude, a.longitude, a.frp));
+
+  const farFieldIndices = hotspots
+    .map((a, idx) => ({ idx, distanceKm: a.nearestFacility?.distanceKm ?? Infinity, frp: a.frp }))
+    .filter(x => x.distanceKm > NEAR_FACILITY_KM)
+    .sort((a, b) => b.frp - a.frp)
+    .slice(0, MAX_LAND_COVER_LOOKUPS);
+
+  const landCovers = await batchQueryLandCover(
+    farFieldIndices.map(x => ({ lat: hotspots[x.idx].latitude, lon: hotspots[x.idx].longitude })),
+    LAND_COVER_CONCURRENCY
+  );
+
+  const landCoverByIndex = new Map<number, typeof landCovers[number]>();
+  farFieldIndices.forEach((x, i) => landCoverByIndex.set(x.idx, landCovers[i]));
+
+  hotspots.forEach((anomaly, idx) => {
+    const persistence = persistenceByAnomaly[idx];
+    anomaly.classification = classifyThermalAnomaly({
+      distanceKm: anomaly.nearestFacility?.distanceKm,
+      facilityType: anomaly.nearestFacility?.facility.type,
+      facilityName: anomaly.nearestFacility?.facility.name,
+      frp: anomaly.frp,
+      isPersistent: persistence.isPersistent,
+      occurrences: persistence.occurrences,
+      landCover: landCoverByIndex.get(idx) || 'unknown'
+    });
+    anomaly.classification.firstSeenAt = persistence.firstSeenAt;
+  });
+}
 
 let currentMapKey = process.env.NASA_FIRMS_MAP_KEY || '4ddefd0f9c4e2cf87148595c54a19642';
 
@@ -283,6 +332,8 @@ export async function fetchLiveFIRMSHotspots(): Promise<{ anomalies: ThermalAnom
       ...highPowerHotspots.slice(0, 100),
       ...generalHotspots.slice(0, 80)
     ];
+
+    await classifyHotspots(curatedHotspots);
 
     cachedRealAnomalies = curatedHotspots;
     isUsingRealData = true;
