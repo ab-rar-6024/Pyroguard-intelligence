@@ -2,17 +2,20 @@ import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore } from './gisCalculations.js';
 import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } from '../types.js';
 import { recordDetection, pruneStaleCells } from './persistenceTracker.js';
-import { batchQueryLandCover } from './landCoverService.js';
+import { batchQueryLandCover, peekLandCoverCache } from './landCoverService.js';
 import { classifyThermalAnomaly } from './fireClassification.js';
 import { saveThermalSnapshot } from './firestoreService.js';
 
-// Cap on far-field (no nearby facility) hotspots queried against OSM per
-// refresh cycle, to keep the public Overpass endpoint call volume bounded.
-// Kept small and bounded: the public Overpass API has no SLA and is
+// Cap on far-field (no nearby facility) hotspots NETWORK-queried against OSM
+// per refresh cycle, to keep the public Overpass endpoint call volume
+// bounded. Kept small and bounded: the public Overpass API has no SLA and is
 // frequently slow, so this caps worst-case added latency per refresh to
 // roughly (MAX_LAND_COVER_LOOKUPS / concurrency) * per-request timeout.
-const MAX_LAND_COVER_LOOKUPS = 16;
-const LAND_COVER_CONCURRENCY = 4;
+// Hotspots whose grid cell is already cached from a prior refresh don't
+// count against this budget (see classifyHotspots below), so real-world
+// coverage grows well past this number over successive refreshes.
+const MAX_LAND_COVER_LOOKUPS = 24;
+const LAND_COVER_CONCURRENCY = 6;
 const NEAR_FACILITY_KM = 20;
 
 // Attaches persistence + classification data to a curated batch of
@@ -23,19 +26,40 @@ async function classifyHotspots(hotspots: ThermalAnomaly[]): Promise<void> {
 
   const persistenceByAnomaly = hotspots.map(a => recordDetection(a.latitude, a.longitude, a.frp));
 
-  const farFieldIndices = hotspots
-    .map((a, idx) => ({ idx, distanceKm: a.nearestFacility?.distanceKm ?? Infinity, frp: a.frp }))
-    .filter(x => x.distanceKm > NEAR_FACILITY_KM)
-    .sort((a, b) => b.frp - a.frp)
+  const landCoverByIndex = new Map<number, ReturnType<typeof peekLandCoverCache>>();
+  const uncachedFarField: { idx: number; frp: number; occurrences: number }[] = [];
+
+  hotspots.forEach((a, idx) => {
+    const distanceKm = a.nearestFacility?.distanceKm ?? Infinity;
+    if (distanceKm <= NEAR_FACILITY_KM) return;
+
+    // Cache hits are free (no network call) - resolve every far-field
+    // hotspot whose ~11km cell was already queried this session, instead of
+    // only ever considering the current cycle's highest-FRP hotspots. This
+    // is what lets a persistent-but-low-FRP hotspot (which would otherwise
+    // never crack a small "top N by FRP" cut) eventually get a real
+    // classification instead of being stuck at "Unclassified" forever.
+    const cached = peekLandCoverCache(a.latitude, a.longitude);
+    if (cached) {
+      landCoverByIndex.set(idx, cached);
+    } else {
+      uncachedFarField.push({ idx, frp: a.frp, occurrences: persistenceByAnomaly[idx].occurrences });
+    }
+  });
+
+  // Among cache misses, prioritize recurring hotspots first (so a
+  // persistent low-FRP source gets resolved - and then stays cached and
+  // resolved for hours - rather than being perpetually outranked by
+  // whichever fires happen to be biggest this cycle), then FRP.
+  const toQuery = uncachedFarField
+    .sort((a, b) => b.occurrences - a.occurrences || b.frp - a.frp)
     .slice(0, MAX_LAND_COVER_LOOKUPS);
 
   const landCovers = await batchQueryLandCover(
-    farFieldIndices.map(x => ({ lat: hotspots[x.idx].latitude, lon: hotspots[x.idx].longitude })),
+    toQuery.map(x => ({ lat: hotspots[x.idx].latitude, lon: hotspots[x.idx].longitude })),
     LAND_COVER_CONCURRENCY
   );
-
-  const landCoverByIndex = new Map<number, typeof landCovers[number]>();
-  farFieldIndices.forEach((x, i) => landCoverByIndex.set(x.idx, landCovers[i]));
+  toQuery.forEach((x, i) => landCoverByIndex.set(x.idx, landCovers[i]));
 
   hotspots.forEach((anomaly, idx) => {
     const persistence = persistenceByAnomaly[idx];

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, History, Database, AlertTriangle, RefreshCw, Flame } from 'lucide-react';
+import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin } from 'lucide-react';
 import { EmergencyAlert, ThermalAnomaly, FireClassification } from '../types';
 import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
@@ -9,6 +9,18 @@ interface IncidentHistoryModalProps {
 
 type Tab = 'hotspots' | 'alerts';
 
+// A facility beyond this distance wasn't actually used to classify the
+// hotspot (see NEAR_FACILITY_KM in nasaFirmsService.ts) - it's just the
+// globally-nearest record in the database, which can be thousands of km
+// away in sparsely-covered regions. Treat it as unrelated past this radius
+// rather than implying the hotspot is "at" that facility.
+const ATTRIBUTION_KM = 20;
+
+const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+function compassFromDeg(deg: number): string {
+  return COMPASS_POINTS[Math.round(deg / 22.5) % 16];
+}
+
 export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onClose }) => {
   const [tab, setTab] = useState<Tab>('hotspots');
   const [loading, setLoading] = useState(true);
@@ -16,6 +28,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
   const [hotspots, setHotspots] = useState<ThermalAnomaly[]>([]);
   const [byType, setByType] = useState<Record<string, number>>({});
   const [firestoreConfigured, setFirestoreConfigured] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -141,41 +154,108 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
 
                 {hotspots.map((h) => {
                   const meta = CLASSIFICATION_META[h.classification?.classification || 'UNKNOWN'];
+                  const distanceKm = h.nearestFacility?.distanceKm;
+                  const isAttributed = h.nearestFacility && typeof distanceKm === 'number' && distanceKm <= ATTRIBUTION_KM;
+                  const isExpanded = expandedId === h.id;
+
                   return (
-                    <div key={h.id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-slate-200">
-                          {h.nearestFacility?.facility.name || 'Unattributed location'}
-                        </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${meta.badgeClass}`}>
-                          {meta.emoji} {meta.label}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
-                        <span>{h.latitude.toFixed(3)}, {h.longitude.toFixed(3)}</span>
-                        <span>•</span>
-                        <span>{h.frp.toFixed(0)} MW</span>
-                        <span>•</span>
-                        <span>{h.satellite}</span>
-                        {h.classification?.landCover && h.classification.landCover !== 'unknown' && (
-                          <>
+                    <div key={h.id} className="rounded-xl bg-slate-900/60 border border-slate-800 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : h.id)}
+                        className="w-full text-left p-3 space-y-1.5 cursor-pointer hover:bg-slate-900 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                            {isAttributed ? h.nearestFacility!.facility.name : 'Unattributed hotspot'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${meta.badgeClass}`}>
+                            {meta.emoji} {meta.label}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
+                          <span>{h.latitude.toFixed(3)}, {h.longitude.toFixed(3)}</span>
+                          <span>•</span>
+                          <span>{h.frp.toFixed(0)} MW</span>
+                          <span>•</span>
+                          <span>{h.satellite}</span>
+                          {h.classification?.landCover && h.classification.landCover !== 'unknown' && (
+                            <>
+                              <span>•</span>
+                              <span className="capitalize">{h.classification.landCover}</span>
+                            </>
+                          )}
+                          {h.classification?.isPersistent && (
+                            <>
+                              <span>•</span>
+                              <span className="text-amber-400 font-bold">Persistent ({h.classification.occurrences}x)</span>
+                            </>
+                          )}
+                          {typeof h.classification?.confidence === 'number' && (
+                            <>
+                              <span>•</span>
+                              <span>{h.classification.confidence}% confidence</span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-3 pb-3 pt-1 space-y-2.5 border-t border-slate-800/60 bg-slate-950/40">
+                          <div className="flex items-start gap-2 text-[11px] text-slate-300">
+                            <MapPin className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <div>Lat {h.latitude.toFixed(4)}, Lon {h.longitude.toFixed(4)}</div>
+                              {h.nearestFacility ? (
+                                <div className="text-slate-500">
+                                  {isAttributed ? 'At ' : 'Nearest facility: '}
+                                  {h.nearestFacility.facility.name} ({h.nearestFacility.facility.country}) -{' '}
+                                  {distanceKm!.toFixed(1)} km away
+                                  {!isAttributed && ' (too far to attribute this hotspot to it)'}
+                                </div>
+                              ) : (
+                                <div className="text-slate-500">No industrial facility on record nearby.</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {typeof h.windSpeedKmh === 'number' && typeof h.windDirectionDeg === 'number' && (
+                            <div className="flex items-start gap-2 text-[11px] text-slate-300">
+                              <Wind className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 mt-0.5" />
+                              <div>
+                                {h.windSpeedKmh.toFixed(0)} km/h from the {compassFromDeg(h.windDirectionDeg)}
+                                {' '}({h.windDirectionDeg.toFixed(0)}°)
+                                {h.nearestFacility?.windSpreadRisk && (
+                                  <span className="text-slate-500"> - {h.nearestFacility.windSpreadRisk.toLowerCase()} relative to facility</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-start gap-2 text-[11px] text-slate-300">
+                            <Flame className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${meta.badgeClass}`}>
+                                {meta.emoji} {meta.label}
+                              </span>
+                              {typeof h.classification?.confidence === 'number' && (
+                                <span className="text-slate-500"> - {h.classification.confidence}% confidence</span>
+                              )}
+                              {h.classification?.reasoning && (
+                                <p className="text-slate-400 mt-1 leading-snug">{h.classification.reasoning}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                            <span>Brightness: {h.brightness.toFixed(1)} K</span>
                             <span>•</span>
-                            <span className="capitalize">{h.classification.landCover}</span>
-                          </>
-                        )}
-                        {h.classification?.isPersistent && (
-                          <>
+                            <span>Detected: {h.acq_date} {h.acq_time} ({h.daynight === 'D' ? 'Day' : 'Night'})</span>
                             <span>•</span>
-                            <span className="text-amber-400 font-bold">Persistent ({h.classification.occurrences}x)</span>
-                          </>
-                        )}
-                        {typeof h.classification?.confidence === 'number' && (
-                          <>
-                            <span>•</span>
-                            <span>{h.classification.confidence}% confidence</span>
-                          </>
-                        )}
-                      </div>
+                            <span>Confidence tag: {h.confidence}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

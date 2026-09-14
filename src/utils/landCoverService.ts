@@ -71,6 +71,14 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass.private.coffee/api/interpreter'
 ];
 
+// Synchronous, no-network cache check - used to resolve land cover for
+// hotspots that share a grid cell with one already queried this session,
+// without spending any of the per-refresh network query budget on them.
+export function peekLandCoverCache(lat: number, lon: number): LandCoverType | undefined {
+  const cached = cache.get(cacheKey(lat, lon));
+  return cached && cached.expiresAt > Date.now() ? cached.type : undefined;
+}
+
 export async function queryLandCover(lat: number, lon: number): Promise<LandCoverType> {
   const key = cacheKey(lat, lon);
   const cached = cache.get(key);
@@ -84,7 +92,14 @@ export async function queryLandCover(lat: number, lon: number): Promise<LandCove
     try {
       const res = await fetchWithHardTimeout(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          // Overpass instances reject or deprioritize requests with no
+          // identifying User-Agent (some return 406/429 outright) - this is
+          // the standard fix per the Overpass API usage policy.
+          'User-Agent': 'PyroGuard-Fire-Intelligence/1.0 (industrial thermal monitoring app)',
+          'Accept': 'application/json'
+        },
         body: `data=${encodeURIComponent(query)}`,
         signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS)
       }, OVERPASS_TIMEOUT_MS);

@@ -84,7 +84,7 @@ function classifyFarField(params: {
   occurrences: number;
   landCover: LandCoverType;
 }): { classification: FireClassification; confidence: number; reasoning: string } {
-  const { frp, isPersistent, landCover } = params;
+  const { frp, isPersistent, occurrences, landCover } = params;
 
   if (landCover === 'forest') {
     return {
@@ -112,13 +112,28 @@ function classifyFarField(params: {
     };
   }
 
-  // Land cover unresolved (not queried, or Overpass unavailable) - fall back
-  // to FRP magnitude and persistence heuristics alone.
-  if (frp >= 80) {
+  // Land cover unresolved (not queried, or the public OSM Overpass service is
+  // unavailable/rate-limited - it has no SLA and this is a routine, expected
+  // fallback path, not an error). Without land-cover confirmation, fall back
+  // to FRP magnitude and persistence alone: a remote hotspot with no
+  // facility record is overwhelmingly either a wildfire or an agricultural
+  // burn in practice (a gas flare, mining fire, or industrial fire all
+  // require a facility to burn at), so a moderate-FRP or recurring detection
+  // still gets a real, if lower-confidence, classification instead of a
+  // blanket "Unclassified".
+  if (frp >= 30) {
     return {
       classification: 'WILDFIRE',
-      confidence: 45,
-      reasoning: `No facility nearby and land-cover data unavailable for this location. High ${frp.toFixed(1)} MW output makes an open-area vegetation fire the most likely explanation, though this is unverified.`
+      confidence: frp >= 80 ? 55 : 45,
+      reasoning: `No facility nearby and land-cover data unavailable for this location. ${frp.toFixed(1)} MW output makes an open-area vegetation fire the most likely explanation, though this is unverified without OSM confirmation.`
+    };
+  }
+
+  if (isPersistent && occurrences >= 3) {
+    return {
+      classification: 'WILDFIRE',
+      confidence: 40,
+      reasoning: `Recurring low-to-moderate thermal signature (${frp.toFixed(1)} MW) across ${occurrences} passes with no nearby facility - consistent with a slow-burning or seasonal vegetation fire, though land cover couldn't be confirmed (OSM unavailable).`
     };
   }
 
