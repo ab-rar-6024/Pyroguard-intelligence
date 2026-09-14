@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
-import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore, exportToGeoJSON, exportToCSV } from '../utils/gisCalculations.js';
+import { calculateDistanceKm, calculateBearingDeg, evaluateWindRisk, calculateThreatScore, exportToGeoJSON, exportToCSV } from '../utils/gisCalculations.js';
 import { ThermalAnomaly, EmergencyAlert, LandCoverType, FireReport } from '../types.js';
 import {
   fetchLiveFIRMSHotspots,
@@ -451,11 +451,31 @@ export function createApp() {
   // GET /api/reports/fire - Recent citizen fire reports, newest first.
   app.get('/api/reports/fire', async (req: Request, res: Response) => {
     const data = await loadRecentFireReports(50);
+
+    // Derived, display-only context (not stored) - lets the UI show how
+    // this sighting relates to the nearest known hazardous facility, the
+    // same "distance + direction" framing used everywhere else in the app.
+    const withContext = data.map((report) => {
+      let nearest: { facilityName: string; country: string; distanceKm: number; bearingDeg: number } | null = null;
+      for (const facility of GLOBAL_INDUSTRIAL_FACILITIES) {
+        const distanceKm = calculateDistanceKm(report.latitude, report.longitude, facility.latitude, facility.longitude);
+        if (!nearest || distanceKm < nearest.distanceKm) {
+          nearest = {
+            facilityName: facility.name,
+            country: facility.country,
+            distanceKm,
+            bearingDeg: calculateBearingDeg(report.latitude, report.longitude, facility.latitude, facility.longitude)
+          };
+        }
+      }
+      return { ...report, nearestFacility: nearest };
+    });
+
     res.json({
       success: true,
       firestoreConfigured: isFirestoreConfigured(),
-      total: data.length,
-      data
+      total: withContext.length,
+      data: withContext
     });
   });
 

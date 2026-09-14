@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin, Camera, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin, Camera, ThumbsUp, ThumbsDown, Navigation, ExternalLink } from 'lucide-react';
 import { EmergencyAlert, ThermalAnomaly, FireClassification, FireReport } from '../types';
 import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
 interface IncidentHistoryModalProps {
   onClose: () => void;
+}
+
+// GET /api/reports/fire attaches this derived (not stored) context: how
+// this sighting relates to the nearest known hazardous facility, the same
+// "distance + direction" framing used everywhere else in the app.
+interface FireReportWithContext extends FireReport {
+  nearestFacility: { facilityName: string; country: string; distanceKm: number; bearingDeg: number } | null;
 }
 
 type Tab = 'hotspots' | 'alerts' | 'reports';
@@ -49,7 +56,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
   const [hotspots, setHotspots] = useState<ThermalAnomaly[]>([]);
-  const [reports, setReports] = useState<FireReport[]>([]);
+  const [reports, setReports] = useState<FireReportWithContext[]>([]);
   const [byType, setByType] = useState<Record<string, number>>({});
   const [firestoreConfigured, setFirestoreConfigured] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -360,13 +367,20 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
               No citizen reports yet. Use "Report Fire" in the navbar to log a sighting the satellite hasn't caught.
             </div>
           ) : (
-            reports.map((report) => (
+            reports.map((report) => {
+              const isExpanded = expandedId === report.id;
+              return (
               <div
                 key={report.id}
-                className="rounded-xl bg-slate-900/60 border border-slate-800 overflow-hidden p-3 space-y-2"
+                className="rounded-xl bg-slate-900/60 border border-slate-800 overflow-hidden"
               >
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : report.id)}
+                  className="w-full text-left p-3 space-y-2 cursor-pointer hover:bg-slate-900 transition-colors"
+                >
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
                     <Camera className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
                     {report.landmark || 'Citizen-reported sighting'}
                   </span>
@@ -392,8 +406,59 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
                     <div className="text-[10px] text-slate-500">{new Date(report.reportedAt).toLocaleString()}</div>
                   </div>
                 </div>
+                </button>
 
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/60">
+                {isExpanded && (
+                  <div className="px-3 pb-3 pt-1 space-y-2.5 border-t border-slate-800/60 bg-slate-950/40">
+                    <div className="flex items-start gap-2 text-[11px] text-slate-300">
+                      <MapPin className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div>Lat {report.latitude.toFixed(6)}, Lon {report.longitude.toFixed(6)}</div>
+                        {report.nearestFacility ? (
+                          <div className="text-slate-500">
+                            {report.nearestFacility.distanceKm.toFixed(1)} km {compassFromDeg(report.nearestFacility.bearingDeg)} of{' '}
+                            {report.nearestFacility.facilityName} ({report.nearestFacility.country})
+                          </div>
+                        ) : (
+                          <div className="text-slate-500">No industrial facility on record nearby.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {report.nearestFacility && (
+                      <div className="flex items-start gap-2 text-[11px] text-slate-300">
+                        <Navigation className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          Direction to {report.nearestFacility.facilityName}: {compassFromDeg(report.nearestFacility.bearingDeg)}{' '}
+                          ({report.nearestFacility.bearingDeg.toFixed(0)}°)
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <a
+                        href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-orange-500/40 text-slate-200 text-[11px] font-bold transition-colors"
+                      >
+                        <MapPin className="w-3.5 h-3.5" /> View on Map <ExternalLink className="w-3 h-3 text-slate-500" />
+                      </a>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-orange-500/40 text-slate-200 text-[11px] font-bold transition-colors"
+                      >
+                        <Navigation className="w-3.5 h-3.5" /> Get Directions <ExternalLink className="w-3 h-3 text-slate-500" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 p-3 pt-1 border-t border-slate-800/60">
                   <span className="text-[10px] text-slate-500 mr-1">Does this look real?</span>
                   <button
                     onClick={() => handleVote(report.id, 'confirm')}
@@ -423,7 +488,8 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 
