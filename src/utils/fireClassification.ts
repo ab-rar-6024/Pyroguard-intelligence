@@ -114,13 +114,16 @@ function classifyFarField(params: {
 
   // Land cover unresolved (not queried, or the public OSM Overpass service is
   // unavailable/rate-limited - it has no SLA and this is a routine, expected
-  // fallback path, not an error). Without land-cover confirmation, fall back
-  // to FRP magnitude and persistence alone: a remote hotspot with no
-  // facility record is overwhelmingly either a wildfire or an agricultural
-  // burn in practice (a gas flare, mining fire, or industrial fire all
-  // require a facility to burn at), so a moderate-FRP or recurring detection
-  // still gets a real, if lower-confidence, classification instead of a
-  // blanket "Unclassified".
+  // fallback path, not an error). A high, single-signature FRP is the one
+  // case still worth a real guess without land cover: a 30+ MW open-area
+  // heat source with no facility is consistent with an active vegetation
+  // fire regardless of terrain. Below that, persistence alone is genuinely
+  // ambiguous between a wildfire and an unregistered gas flare - e.g. a
+  // stable low-MW source recurring for weeks looks identical whether it's a
+  // smoldering scrub fire in a savanna or a flare stack in an oil field with
+  // no database record, and guessing either way is wrong roughly half the
+  // time - so this stays Unknown rather than forcing a confident-looking
+  // answer with no real basis.
   if (frp >= 30) {
     return {
       classification: 'WILDFIRE',
@@ -129,19 +132,11 @@ function classifyFarField(params: {
     };
   }
 
-  if (isPersistent && occurrences >= 3) {
-    return {
-      classification: 'WILDFIRE',
-      confidence: 40,
-      reasoning: `Recurring low-to-moderate thermal signature (${frp.toFixed(1)} MW) across ${occurrences} passes with no nearby facility - consistent with a slow-burning or seasonal vegetation fire, though land cover couldn't be confirmed (OSM unavailable).`
-    };
-  }
-
   if (isPersistent) {
     return {
       classification: 'UNKNOWN',
       confidence: 35,
-      reasoning: `Recurring low-to-moderate thermal signature (${frp.toFixed(1)} MW) with no nearby facility and unresolved land cover - could be an unregistered flare, kiln, or smoldering source. Flagged for manual review.`
+      reasoning: `Recurring low-to-moderate thermal signature (${frp.toFixed(1)} MW) across ${occurrences} passes with no nearby facility and unresolved land cover - equally consistent with an unregistered gas flare or a slow-burning vegetation fire. Flagged for manual review.`
     };
   }
 
