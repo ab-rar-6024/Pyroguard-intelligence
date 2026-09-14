@@ -24,6 +24,28 @@ const ALERTS_COLLECTION = 'alerts';
 const REPORTS_COLLECTION = 'fireReports';
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours with no re-detection
 
+// The Firebase Admin SDK (gRPC underneath) automatically retries transient
+// errors - including RESOURCE_EXHAUSTED, i.e. a Firestore free-tier quota
+// being exhausted - with its own internal exponential backoff, before ever
+// letting the failure reach application code. That's invisible from the
+// outside as a hang: an awaited call can take many seconds or more to
+// finally settle even though it's actually failing the whole time. Race
+// every read against a short timeout so exhausted quota degrades this app
+// to its in-memory fallback quickly instead of stalling every request that
+// touches Firestore. The underlying call is left to keep retrying in the
+// background; its eventual result (if any) is simply ignored.
+function withHardTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[Firestore] ${label} exceeded ${timeoutMs}ms (likely quota exhaustion or an SDK retry-with-backoff in progress) - proceeding without it.`);
+        resolve(fallback);
+      }, timeoutMs);
+    })
+  ]);
+}
+
 let app: App | null = null;
 let db: Firestore | null = null;
 let initAttempted = false;
@@ -99,26 +121,28 @@ export async function saveThermalSnapshot(anomalies: ThermalAnomaly[]): Promise<
   const firestore = getDb();
   if (!firestore) return;
 
-  try {
-    const seenKeys = new Set<string>();
-    const batch = firestore.batch();
-    let writes = 0;
+  await withHardTimeout((async () => {
+    try {
+      const seenKeys = new Set<string>();
+      const batch = firestore.batch();
+      let writes = 0;
 
-    for (const anomaly of anomalies) {
-      const key = gridKey(anomaly.latitude, anomaly.longitude);
-      seenKeys.add(key);
-      batch.set(firestore.collection(HOTSPOTS_COLLECTION).doc(key), anomalyToDoc(anomaly), { merge: false });
-      writes++;
+      for (const anomaly of anomalies) {
+        const key = gridKey(anomaly.latitude, anomaly.longitude);
+        seenKeys.add(key);
+        batch.set(firestore.collection(HOTSPOTS_COLLECTION).doc(key), anomalyToDoc(anomaly), { merge: false });
+        writes++;
+      }
+
+      if (writes > 0) {
+        await batch.commit();
+      }
+
+      await sweepStaleHotspots(firestore, seenKeys);
+    } catch (err: any) {
+      console.error('[Firestore] Failed to save thermal snapshot:', err.message);
     }
-
-    if (writes > 0) {
-      await batch.commit();
-    }
-
-    await sweepStaleHotspots(firestore, seenKeys);
-  } catch (err: any) {
-    console.error('[Firestore] Failed to save thermal snapshot:', err.message);
-  }
+  })(), undefined, 8000, 'saveThermalSnapshot');
 }
 
 async function sweepStaleHotspots(firestore: Firestore, currentKeys: Set<string>): Promise<void> {
@@ -158,15 +182,17 @@ export async function getLatestSnapshotAgeMs(): Promise<number | null> {
   const firestore = getDb();
   if (!firestore) return null;
 
-  try {
-    const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).orderBy('updatedAt', 'desc').limit(1).get();
-    if (snapshot.empty) return null;
-    const updatedAt = snapshot.docs[0].data().updatedAt;
-    return updatedAt?.toMillis ? Date.now() - updatedAt.toMillis() : null;
-  } catch (err: any) {
-    console.error('[Firestore] Failed to check latest snapshot age:', err.message);
-    return null;
-  }
+  return withHardTimeout((async () => {
+    try {
+      const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).orderBy('updatedAt', 'desc').limit(1).get();
+      if (snapshot.empty) return null;
+      const updatedAt = snapshot.docs[0].data().updatedAt;
+      return updatedAt?.toMillis ? Date.now() - updatedAt.toMillis() : null;
+    } catch (err: any) {
+      console.error('[Firestore] Failed to check latest snapshot age:', err.message);
+      return null;
+    }
+  })(), null, 3000, 'getLatestSnapshotAgeMs');
 }
 
 // Reconstructs a ThermalAnomaly[] from the current Firestore snapshot -
@@ -177,6 +203,7 @@ export async function loadThermalSnapshot(): Promise<ThermalAnomaly[]> {
   const firestore = getDb();
   if (!firestore) return [];
 
+  return withHardTimeout((async () => {
   try {
     const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).orderBy('updatedAt', 'desc').limit(300).get();
     if (snapshot.empty) return [];
@@ -226,6 +253,7 @@ export async function loadThermalSnapshot(): Promise<ThermalAnomaly[]> {
     console.error('[Firestore] Failed to load thermal snapshot:', err.message);
     return [];
   }
+  })(), [], 5000, 'loadThermalSnapshot');
 }
 
 // Returns {gridKey, occurrences, lastSeenAt} for every stored hotspot, used
@@ -234,21 +262,23 @@ export async function loadPersistenceSeed(): Promise<{ key: string; occurrences:
   const firestore = getDb();
   if (!firestore) return [];
 
-  try {
-    const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).limit(300).get();
-    return snapshot.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        key: doc.id,
-        occurrences: d.occurrences || 1,
-        lastSeenAt: d.updatedAt?.toMillis?.() || Date.now(),
-        frp: d.frpMW || 0
-      };
-    });
-  } catch (err: any) {
-    console.error('[Firestore] Failed to load persistence seed:', err.message);
-    return [];
-  }
+  return withHardTimeout((async () => {
+    try {
+      const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).limit(300).get();
+      return snapshot.docs.map((doc) => {
+        const d = doc.data();
+        return {
+          key: doc.id,
+          occurrences: d.occurrences || 1,
+          lastSeenAt: d.updatedAt?.toMillis?.() || Date.now(),
+          frp: d.frpMW || 0
+        };
+      });
+    } catch (err: any) {
+      console.error('[Firestore] Failed to load persistence seed:', err.message);
+      return [];
+    }
+  })(), [], 5000, 'loadPersistenceSeed');
 }
 
 // Returns the most recent alerts for the history/audit view - a durable
