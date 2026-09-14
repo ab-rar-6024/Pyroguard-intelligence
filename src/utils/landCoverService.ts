@@ -20,7 +20,12 @@ const cache = new Map<string, CacheEntry>();
 const CACHE_GRID_SIZE_DEG = 0.1;
 const SUCCESS_TTL_MS = 6 * 60 * 60 * 1000;
 const FAILURE_TTL_MS = 15 * 60 * 1000;
-const OVERPASS_TIMEOUT_MS = 3000;
+// Measured: the primary Overpass mirror can legitimately take ~1.2-2.7s to
+// respond even on success, so a too-tight timeout was cutting off real
+// answers right before they arrived. Mirrors are raced in parallel (see
+// queryLandCover) rather than tried sequentially, so this is the total
+// worst-case wait per lookup, not a per-mirror budget stacked three times.
+const OVERPASS_TIMEOUT_MS = 6000;
 
 // AbortSignal.timeout() alone has been observed to not reliably bound the
 // wall-clock time of a fetch() call on every platform/runtime. Race it
@@ -88,40 +93,49 @@ export async function queryLandCover(lat: number, lon: number): Promise<LandCove
 
   const query = `[out:json][timeout:5];(way(around:1500,${lat},${lon})["landuse"];way(around:1500,${lat},${lon})["natural"="wood"];);out tags 5;`;
 
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const res = await fetchWithHardTimeout(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          // Overpass instances reject or deprioritize requests with no
-          // identifying User-Agent (some return 406/429 outright) - this is
-          // the standard fix per the Overpass API usage policy.
-          'User-Agent': 'PyroGuard-Fire-Intelligence/1.0 (industrial thermal monitoring app)',
-          'Accept': 'application/json'
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS)
-      }, OVERPASS_TIMEOUT_MS);
+  // Race all mirrors in parallel and take whichever answers first, instead
+  // of trying them one at a time - sequential trials meant a single lookup
+  // could stack up to 3 timeouts back to back (3x the actual budget) before
+  // giving up, which was starving the per-refresh query budget. Measured
+  // in production: the reference instance (overpass-api.de) usually wins,
+  // but which mirror is fastest varies, so racing all three is both faster
+  // and more resilient than betting on one order.
+  const attempts = OVERPASS_ENDPOINTS.map(async (endpoint) => {
+    const res = await fetchWithHardTimeout(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        // Overpass instances reject or deprioritize requests with no
+        // identifying User-Agent (some return 406/429 outright) - this is
+        // the standard fix per the Overpass API usage policy.
+        'User-Agent': 'PyroGuard-Fire-Intelligence/1.0 (industrial thermal monitoring app)',
+        'Accept': 'application/json'
+      },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS)
+    }, OVERPASS_TIMEOUT_MS);
 
-      if (!res.ok) throw new Error(`status ${res.status}`);
+    if (!res.ok) throw new Error(`${endpoint} status ${res.status}`);
+    const data = await res.json();
+    return data.elements || [];
+  });
 
-      const data = await res.json();
-      const type = classifyFromOsmTags(data.elements || []);
-      cache.set(key, { type, expiresAt: Date.now() + SUCCESS_TTL_MS });
-      return type;
-    } catch (err: any) {
-      console.warn(`[OSM Land Cover] ${endpoint} failed for ${key}: ${err.message}`);
-      // Try the next mirror before giving up.
+  try {
+    const elements = await Promise.any(attempts);
+    const type = classifyFromOsmTags(elements);
+    cache.set(key, { type, expiresAt: Date.now() + SUCCESS_TTL_MS });
+    return type;
+  } catch (err: any) {
+    // All mirrors failed/timed out - this is an expected, routine fallback
+    // path for a free, unauthenticated public service with no SLA, not an
+    // application error. Cache the miss briefly so a flaky window doesn't
+    // get re-hammered every time this same area recurs in a refresh cycle.
+    if (err instanceof AggregateError) {
+      console.warn(`[OSM Land Cover] all mirrors failed for ${key}: ${err.errors.map((e: any) => e.message).join('; ')}`);
     }
+    cache.set(key, { type: 'unknown', expiresAt: Date.now() + FAILURE_TTL_MS });
+    return 'unknown';
   }
-
-  // All mirrors failed/timed out - this is an expected, routine fallback
-  // path for a free, unauthenticated public service with no SLA, not an
-  // application error. Cache the miss briefly so a flaky window doesn't get
-  // re-hammered every time this same area recurs in a refresh cycle.
-  cache.set(key, { type: 'unknown', expiresAt: Date.now() + FAILURE_TTL_MS });
-  return 'unknown';
 }
 
 // Diagnostic-only: same request as queryLandCover but returns every

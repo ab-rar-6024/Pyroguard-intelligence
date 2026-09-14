@@ -10,12 +10,16 @@ import { saveThermalSnapshot } from './firestoreService.js';
 // per refresh cycle, to keep the public Overpass endpoint call volume
 // bounded. Kept small and bounded: the public Overpass API has no SLA and is
 // frequently slow, so this caps worst-case added latency per refresh to
-// roughly (MAX_LAND_COVER_LOOKUPS / concurrency) * per-request timeout.
+// roughly ceil(MAX_LAND_COVER_LOOKUPS / concurrency) * OVERPASS_TIMEOUT_MS
+// (6s as of this writing - see landCoverService.ts) = ~12s worst case here,
+// measured to be well inside this deployment's actual function time budget
+// (a fully-timed-out refresh under the OLD 3s-sequential-mirrors logic
+// still completed in ~26s without the platform killing the request).
 // Hotspots whose grid cell is already cached from a prior refresh don't
 // count against this budget (see classifyHotspots below), so real-world
 // coverage grows well past this number over successive refreshes.
-const MAX_LAND_COVER_LOOKUPS = 24;
-const LAND_COVER_CONCURRENCY = 6;
+const MAX_LAND_COVER_LOOKUPS = 20;
+const LAND_COVER_CONCURRENCY = 10;
 const NEAR_FACILITY_KM = 20;
 
 // Attaches persistence + classification data to a curated batch of
