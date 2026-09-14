@@ -1,15 +1,26 @@
 import { LandCoverType } from '../types.js';
 
-// Queries OpenStreetMap (via the public Overpass API) for land-use context
-// around a coordinate, used as a classification signal for hotspots that
-// aren't near a known industrial facility - per SIH PS 26162's requirement
-// to integrate "NASA FIRMS, OSM & Satellite Data".
+// Resolves land-use context (forest/farmland/industrial/urban) around a
+// coordinate, used as a classification signal for hotspots that aren't near
+// a known industrial facility - per SIH PS 26162's requirement to integrate
+// "NASA FIRMS, OSM & Satellite Data".
 //
-// Bounded and cached deliberately: Overpass is a shared public service with
-// no SLA, and this app may have hundreds of far-field hotspots per refresh.
-// Only a capped, prioritized subset is ever queried (see batchQueryLandCover
-// call sites) and results are cached per ~11km grid cell so recurring
-// hotspots in the same area don't re-trigger a network call every cycle.
+// Primary source is the Mapbox Tilequery API (backed by OSM landuse data).
+// The public Overpass API mirrors below are kept only as a fallback for
+// deployments with no MAPBOX_ACCESS_TOKEN configured: measured in
+// production, all three Overpass mirrors are unreachable from this app's
+// Vercel deployment (connections hang at TCP/TLS connect and never
+// complete - 0 successful lookups across a full session of live traffic),
+// which matches known behavior of free Overpass instances rate-limiting or
+// dropping connections from cloud/datacenter IP ranges. Mapbox's API is a
+// paid-tier-capable commercial service designed for exactly this kind of
+// programmatic, server-side traffic and has no such block.
+//
+// Bounded and cached deliberately regardless of source: this app may have
+// hundreds of far-field hotspots per refresh. Only a capped, prioritized
+// subset is ever queried (see batchQueryLandCover call sites) and results
+// are cached per ~11km grid cell so recurring hotspots in the same area
+// don't re-trigger a network call every cycle.
 
 interface CacheEntry {
   type: LandCoverType;
@@ -66,40 +77,75 @@ function classifyFromOsmTags(elements: Array<{ tags?: Record<string, string> }>)
   return sorted[0][1] > 0 ? sorted[0][0] : 'unknown';
 }
 
-// Multiple public Overpass mirrors, tried in order. The reference instance
-// (overpass-api.de) is frequently rate-limited/slow; falling through to
-// alternate mirrors materially improves real-world success rate for a free,
-// unauthenticated dependency with no SLA.
+// Mapbox Streets v8's "landuse" layer carries both landuse (agriculture,
+// industrial, residential...) and landcover (wood, scrub, grass, rock,
+// sand...) features under one layer - see
+// https://docs.mapbox.com/data/tilesets/reference/mapbox-streets-v8/
+const MAPBOX_CLASS_TO_LAND_COVER: Record<string, LandCoverType> = {
+  wood: 'forest',
+  scrub: 'forest',
+  agriculture: 'farmland',
+  grass: 'farmland',
+  industrial: 'industrial',
+  facility: 'industrial',
+  airport: 'industrial',
+  residential: 'urban',
+  commercial_area: 'urban',
+  school: 'urban',
+  hospital: 'urban',
+  cemetery: 'urban',
+  park: 'urban',
+  parking: 'urban',
+  pitch: 'urban',
+  piste: 'urban'
+};
+
+function classifyFromMapboxFeatures(features: Array<{ properties?: Record<string, any> }>): LandCoverType {
+  const tagCounts: Record<LandCoverType, number> = { forest: 0, farmland: 0, industrial: 0, urban: 0, unknown: 0 };
+
+  for (const f of features) {
+    const cls = f.properties?.class as string | undefined;
+    const mapped = cls ? MAPBOX_CLASS_TO_LAND_COVER[cls] : undefined;
+    if (mapped) tagCounts[mapped]++;
+  }
+
+  const sorted = (Object.entries(tagCounts) as [LandCoverType, number][]).sort((a, b) => b[1] - a[1]);
+  return sorted[0][1] > 0 ? sorted[0][0] : 'unknown';
+}
+
+const MAPBOX_TIMEOUT_MS = 6000;
+const MAPBOX_QUERY_RADIUS_M = 1500;
+
+async function queryLandCoverMapbox(lat: number, lon: number, token: string): Promise<LandCoverType> {
+  const url = `https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/${lon},${lat}.json` +
+    `?radius=${MAPBOX_QUERY_RADIUS_M}&layers=landuse&limit=10&access_token=${token}`;
+
+  const res = await fetchWithHardTimeout(url, {
+    signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS)
+  }, MAPBOX_TIMEOUT_MS);
+
+  if (!res.ok) throw new Error(`Mapbox Tilequery status ${res.status}`);
+  const data = await res.json();
+  return classifyFromMapboxFeatures(data.features || []);
+}
+
+// Multiple public Overpass mirrors, raced in parallel. Kept only as a
+// fallback for deployments without MAPBOX_ACCESS_TOKEN configured - see the
+// file-level comment for why these are unreliable from serverless/cloud
+// deployments in practice.
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter'
 ];
 
-// Synchronous, no-network cache check - used to resolve land cover for
-// hotspots that share a grid cell with one already queried this session,
-// without spending any of the per-refresh network query budget on them.
-export function peekLandCoverCache(lat: number, lon: number): LandCoverType | undefined {
-  const cached = cache.get(cacheKey(lat, lon));
-  return cached && cached.expiresAt > Date.now() ? cached.type : undefined;
-}
-
-export async function queryLandCover(lat: number, lon: number): Promise<LandCoverType> {
-  const key = cacheKey(lat, lon);
-  const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.type;
-  }
-
+async function queryLandCoverOverpass(lat: number, lon: number): Promise<LandCoverType> {
   const query = `[out:json][timeout:5];(way(around:1500,${lat},${lon})["landuse"];way(around:1500,${lat},${lon})["natural"="wood"];);out tags 5;`;
 
   // Race all mirrors in parallel and take whichever answers first, instead
   // of trying them one at a time - sequential trials meant a single lookup
   // could stack up to 3 timeouts back to back (3x the actual budget) before
-  // giving up, which was starving the per-refresh query budget. Measured
-  // in production: the reference instance (overpass-api.de) usually wins,
-  // but which mirror is fastest varies, so racing all three is both faster
-  // and more resilient than betting on one order.
+  // giving up, which was starving the per-refresh query budget.
   const attempts = OVERPASS_ENDPOINTS.map(async (endpoint) => {
     const res = await fetchWithHardTimeout(endpoint, {
       method: 'POST',
@@ -120,18 +166,42 @@ export async function queryLandCover(lat: number, lon: number): Promise<LandCove
     return data.elements || [];
   });
 
+  const elements = await Promise.any(attempts);
+  return classifyFromOsmTags(elements);
+}
+
+// Synchronous, no-network cache check - used to resolve land cover for
+// hotspots that share a grid cell with one already queried this session,
+// without spending any of the per-refresh network query budget on them.
+export function peekLandCoverCache(lat: number, lon: number): LandCoverType | undefined {
+  const cached = cache.get(cacheKey(lat, lon));
+  return cached && cached.expiresAt > Date.now() ? cached.type : undefined;
+}
+
+export async function queryLandCover(lat: number, lon: number): Promise<LandCoverType> {
+  const key = cacheKey(lat, lon);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.type;
+  }
+
+  const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
+
   try {
-    const elements = await Promise.any(attempts);
-    const type = classifyFromOsmTags(elements);
+    const type = mapboxToken
+      ? await queryLandCoverMapbox(lat, lon, mapboxToken)
+      : await queryLandCoverOverpass(lat, lon);
     cache.set(key, { type, expiresAt: Date.now() + SUCCESS_TTL_MS });
     return type;
   } catch (err: any) {
-    // All mirrors failed/timed out - this is an expected, routine fallback
-    // path for a free, unauthenticated public service with no SLA, not an
-    // application error. Cache the miss briefly so a flaky window doesn't
-    // get re-hammered every time this same area recurs in a refresh cycle.
+    // Source unreachable/erroring - this is a routine fallback path for a
+    // third-party geodata dependency, not an application error. Cache the
+    // miss briefly so a flaky window doesn't get re-hammered every time this
+    // same area recurs in a refresh cycle.
     if (err instanceof AggregateError) {
-      console.warn(`[OSM Land Cover] all mirrors failed for ${key}: ${err.errors.map((e: any) => e.message).join('; ')}`);
+      console.warn(`[Land Cover] all Overpass mirrors failed for ${key}: ${err.errors.map((e: any) => e.message).join('; ')}`);
+    } else {
+      console.warn(`[Land Cover] lookup failed for ${key}: ${err.message}`);
     }
     cache.set(key, { type: 'unknown', expiresAt: Date.now() + FAILURE_TTL_MS });
     return 'unknown';
