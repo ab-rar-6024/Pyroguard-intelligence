@@ -49,7 +49,7 @@ const TERMS: { term: string; plain: string; detail?: string }[] = [
   },
   {
     term: 'Simulate Dispatch',
-    plain: 'A planning/training exercise, not a real emergency action. Clicking it logs a mock responder assignment inside this app only — it does not call, text, or notify any real fire department or emergency service.'
+    plain: 'A planning/training exercise, not a real emergency action. Clicking it opens a confirmation panel with a direct 112 dial button (India\'s real emergency number), then logs a mock responder assignment inside this app only — it does not call, text, or notify any real fire department or emergency service.'
   },
   {
     term: 'Confidence %',

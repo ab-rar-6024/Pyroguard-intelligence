@@ -13,6 +13,7 @@ import { IndiaCommandCenterModal } from './components/IndiaCommandCenterModal';
 import { GlossaryModal } from './components/GlossaryModal';
 import { IncidentHistoryModal } from './components/IncidentHistoryModal';
 import { ReportFireModal } from './components/ReportFireModal';
+import { DispatchConfirmModal } from './components/DispatchConfirmModal';
 import { 
   ThermalAnomaly, 
   IndustrialFacility, 
@@ -44,6 +45,8 @@ export default function App() {
   const [showGlossary, setShowGlossary] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showReportFire, setShowReportFire] = useState(false);
+  const [pendingDispatch, setPendingDispatch] = useState<{ anomaly: ThermalAnomaly; facility: IndustrialFacility; customMessage?: string } | null>(null);
+  const [dispatchSubmitting, setDispatchSubmitting] = useState(false);
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -184,12 +187,22 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Dispatch Emergency Responders Handler
-  const handleTriggerDispatch = async (
+  // Dispatch Emergency Responders Handler - opens a confirmation panel first
+  // (with a direct tel:112 dial option) rather than firing immediately, so
+  // anyone watching a genuinely real fire has the real emergency number in
+  // front of them before logging a mock dispatch that contacts no one.
+  const handleTriggerDispatch = (
     anomaly: ThermalAnomaly,
     facility: IndustrialFacility,
     customMessage?: string
   ) => {
+    setPendingDispatch({ anomaly, facility, customMessage });
+  };
+
+  const handleConfirmDispatch = async () => {
+    if (!pendingDispatch) return;
+    const { anomaly, facility, customMessage } = pendingDispatch;
+    setDispatchSubmitting(true);
     try {
       const res = await fetch('/api/alerts/dispatch', {
         method: 'POST',
@@ -208,6 +221,9 @@ export default function App() {
       }
     } catch (err) {
       console.error('Dispatch trigger error:', err);
+    } finally {
+      setDispatchSubmitting(false);
+      setPendingDispatch(null);
     }
   };
 
@@ -411,6 +427,17 @@ export default function App() {
       {/* Citizen fire sighting report - ground truth for gaps the satellite misses */}
       {showReportFire && (
         <ReportFireModal onClose={() => setShowReportFire(false)} />
+      )}
+
+      {/* Dispatch confirmation - surfaces the real 112 emergency number before logging a mock dispatch */}
+      {pendingDispatch && (
+        <DispatchConfirmModal
+          anomaly={pendingDispatch.anomaly}
+          facility={pendingDispatch.facility}
+          submitting={dispatchSubmitting}
+          onClose={() => setPendingDispatch(null)}
+          onConfirm={handleConfirmDispatch}
+        />
       )}
 
       {/* Widget Layout Manager Drawer */}
