@@ -6,6 +6,22 @@ import { batchQueryLandCover, peekLandCoverCache } from './landCoverService.js';
 import { classifyThermalAnomaly } from './fireClassification.js';
 import { saveThermalSnapshot } from './firestoreService.js';
 
+// AbortSignal.timeout() alone has been observed to not reliably bound the
+// wall-clock time of a fetch() call on this platform (same issue already
+// worked around for the OSM Overpass calls in landCoverService.ts) - a
+// hung connection to a slow/unresponsive NASA server can leave the fetch
+// pending indefinitely despite the abort signal firing. Race it against a
+// plain timer so one bad region can never stall the whole refresh (and
+// with it, every request that touches ensureFreshData()) forever.
+function fetchWithHardTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  return Promise.race([
+    fetch(url, init),
+    new Promise<Response>((_, reject) => {
+      setTimeout(() => reject(new Error('NASA FIRMS fetch hard timeout')), timeoutMs);
+    })
+  ]);
+}
+
 // Cap on far-field (no nearby facility) hotspots NETWORK-queried against OSM
 // per refresh cycle, to keep the public Overpass endpoint call volume
 // bounded. Kept small and bounded: the public Overpass API has no SLA and is
@@ -234,10 +250,10 @@ export async function fetchLiveFIRMSHotspots(): Promise<{ anomalies: ThermalAnom
     const fetchPromises = GLOBAL_BBOX_REGIONS.map(async (region) => {
       try {
         const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${currentMapKey}/${region.instrument}/${region.bbox}/1`;
-        const res = await fetch(url, {
+        const res = await fetchWithHardTimeout(url, {
           headers: { 'User-Agent': 'PyroGuard-Industrial-Fire-Monitor/2.0' },
           signal: AbortSignal.timeout(10000)
-        });
+        }, 10000);
 
         if (res.ok) {
           const csvText = await res.text();

@@ -246,7 +246,19 @@ async function ensureFreshData(): Promise<void> {
       refreshInFlight = null;
     });
   }
-  await refreshInFlight;
+  // Defensive backstop: refreshNASAData() has its own internal timeouts on
+  // every network call it makes, but if one is ever missing or a new one
+  // gets added without one (exactly what happened with the NASA FIRMS
+  // fetch - AbortSignal.timeout() alone doesn't reliably bound fetch() on
+  // this platform), a single hung request would otherwise block every
+  // route that calls this function, indefinitely, for every visitor. Cap
+  // the wait so a stale-but-present cache is always served instead of a
+  // dead page. The refresh itself keeps running in the background and
+  // still updates the cache whenever it does settle.
+  await Promise.race([
+    refreshInFlight,
+    new Promise<void>((resolve) => setTimeout(resolve, 20000))
+  ]);
 }
 
 export function createApp() {
