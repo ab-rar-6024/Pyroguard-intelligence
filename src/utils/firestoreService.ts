@@ -1,7 +1,8 @@
 import { App, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { Firestore, getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { ThermalAnomaly, EmergencyAlert } from '../types.js';
+import { ThermalAnomaly, EmergencyAlert, FireClassification, LandCoverType } from '../types.js';
 import { gridKey } from './persistenceTracker.js';
+import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 
 // Persists PyroGuard's live data to Firebase Firestore, when configured.
 //
@@ -141,6 +142,121 @@ async function sweepStaleHotspots(firestore: Firestore, currentKeys: Set<string>
   if (deletions > 0) {
     await batch.commit();
     console.log(`[Firestore] Swept ${deletions} stale hotspot(s) not re-detected in ${STALE_AFTER_MS / 3600000}h.`);
+  }
+}
+
+// Reconstructs a ThermalAnomaly[] from the current Firestore snapshot -
+// used to recover from a cold start with real recent data instead of the
+// synthetic baseline generator, and to seed persistence tracking so
+// "persistent source" status doesn't reset to false on every cold start.
+export async function loadThermalSnapshot(): Promise<ThermalAnomaly[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).orderBy('updatedAt', 'desc').limit(300).get();
+    if (snapshot.empty) return [];
+
+    return snapshot.docs.map((doc, idx) => {
+      const d = doc.data();
+      const facility = d.nearestFacility ? GLOBAL_INDUSTRIAL_FACILITIES.find(f => f.id === d.nearestFacility.facilityId) : undefined;
+
+      const anomaly: ThermalAnomaly = {
+        id: `FIRMS-RESTORED-${doc.id}-${idx}`,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        brightness: d.brightnessKelvin,
+        frp: d.frpMW,
+        scan: 1,
+        track: 1,
+        acq_date: d.acqDate,
+        acq_time: d.acqTime,
+        satellite: d.satellite,
+        confidence: d.confidence,
+        daynight: d.daynight,
+        windSpeedKmh: d.windSpeedKmh,
+        windDirectionDeg: d.windDirectionDeg,
+        nearestFacility: facility && d.nearestFacility
+          ? {
+              facility,
+              distanceKm: d.nearestFacility.distanceKm,
+              threatScore: d.nearestFacility.threatScore,
+              threatLevel: d.nearestFacility.threatLevel,
+              timeToImpactHours: d.nearestFacility.timeToImpactHours,
+              windSpreadRisk: d.nearestFacility.windSpreadRisk
+            }
+          : undefined,
+        classification: {
+          classification: d.fireType as FireClassification,
+          confidence: d.classificationConfidence,
+          reasoning: d.classificationReasoning,
+          isPersistent: d.isPersistentSource,
+          occurrences: d.occurrences,
+          landCover: d.landCover as LandCoverType,
+          firstSeenAt: d.updatedAt?.toDate?.().toISOString()
+        }
+      };
+      return anomaly;
+    });
+  } catch (err: any) {
+    console.error('[Firestore] Failed to load thermal snapshot:', err.message);
+    return [];
+  }
+}
+
+// Returns {gridKey, occurrences, lastSeenAt} for every stored hotspot, used
+// to seed the in-memory persistence-tracking grid on a cold start.
+export async function loadPersistenceSeed(): Promise<{ key: string; occurrences: number; lastSeenAt: number; frp: number }[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).limit(300).get();
+    return snapshot.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        key: doc.id,
+        occurrences: d.occurrences || 1,
+        lastSeenAt: d.updatedAt?.toMillis?.() || Date.now(),
+        frp: d.frpMW || 0
+      };
+    });
+  } catch (err: any) {
+    console.error('[Firestore] Failed to load persistence seed:', err.message);
+    return [];
+  }
+}
+
+// Returns the most recent alerts for the history/audit view - a durable
+// record that survives cold starts, unlike the in-memory activeAlerts list.
+export async function loadRecentAlerts(limit = 100): Promise<EmergencyAlert[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore.collection(ALERTS_COLLECTION).orderBy('createdAt', 'desc').limit(limit).get();
+    return snapshot.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        timestamp: d.timestamp,
+        facilityId: d.facilityId,
+        facilityName: d.facilityName,
+        anomalyId: d.anomalyId,
+        severity: d.severity,
+        title: d.title,
+        message: d.message,
+        distanceKm: d.distanceKm,
+        frpMW: d.frpMW,
+        dispatchedTo: d.dispatchedTo,
+        status: d.status,
+        evacuationPerimeterKm: d.evacuationPerimeterKm,
+        apparatusAssigned: d.apparatusAssigned
+      } as EmergencyAlert;
+    });
+  } catch (err: any) {
+    console.error('[Firestore] Failed to load recent alerts:', err.message);
+    return [];
   }
 }
 

@@ -11,6 +11,7 @@ import { FastAPICodeViewerModal } from './components/FastAPICodeViewerModal';
 import { CustomWidgetDrawer } from './components/CustomWidgetDrawer';
 import { IndiaCommandCenterModal } from './components/IndiaCommandCenterModal';
 import { GlossaryModal } from './components/GlossaryModal';
+import { IncidentHistoryModal } from './components/IncidentHistoryModal';
 import { 
   ThermalAnomaly, 
   IndustrialFacility, 
@@ -40,6 +41,7 @@ export default function App() {
   const [showWidgetsDrawer, setShowWidgetsDrawer] = useState(false);
   const [showIndiaModal, setShowIndiaModal] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -170,6 +172,7 @@ export default function App() {
         setShowFastAPIModal(false);
         setShowWidgetsDrawer(false);
         setShowGlossary(false);
+        setShowHistory(false);
       } else if (e.key === 'e' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setShowExportModal(true);
@@ -249,6 +252,7 @@ export default function App() {
         onOpenWidgets={() => setShowWidgetsDrawer(true)}
         onOpenIndiaCommand={() => setShowIndiaModal(true)}
         onOpenGlossary={() => setShowGlossary(true)}
+        onOpenHistory={() => setShowHistory(true)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         selectedSeverity={selectedSeverity}
@@ -395,6 +399,11 @@ export default function App() {
       {/* Plain-Language Glossary / Help Modal */}
       {showGlossary && (
         <GlossaryModal onClose={() => setShowGlossary(false)} />
+      )}
+
+      {/* Durable Incident History (Firestore-backed) */}
+      {showHistory && (
+        <IncidentHistoryModal onClose={() => setShowHistory(false)} />
       )}
 
       {/* Widget Layout Manager Drawer */}

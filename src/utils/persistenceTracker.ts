@@ -56,6 +56,23 @@ export function recordDetection(lat: number, lon: number, frp: number): Persiste
   return { isPersistent: false, occurrences: 1, firstSeenAt: new Date(now).toISOString() };
 }
 
+// Seeds the grid from a durable source (Firestore) on a cold start, so
+// "persistent source" status doesn't wrongly reset to false just because
+// this serverless instance is new. Only fills cells not already tracked -
+// never overwrites live in-memory state.
+export function seedFromSnapshot(entries: { key: string; occurrences: number; lastSeenAt: number; frp: number }[]): void {
+  for (const entry of entries) {
+    if (!grid.has(entry.key)) {
+      grid.set(entry.key, {
+        firstSeenAt: entry.lastSeenAt,
+        lastSeenAt: entry.lastSeenAt,
+        occurrences: entry.occurrences,
+        avgFrp: entry.frp
+      });
+    }
+  }
+}
+
 // Bound memory growth by evicting cells that haven't recurred recently.
 export function pruneStaleCells(): void {
   const now = Date.now();

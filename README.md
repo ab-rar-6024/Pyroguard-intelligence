@@ -142,6 +142,11 @@ PyroGuard's core data (cached anomalies, alerts, the persistence-tracking grid) 
 - **Stale sweep** — hotspots not re-detected in 6 hours are deleted on the next refresh, so extinguished fires don't linger forever.
 - **`alerts` collection** — append-only, one document per alert (auto-generated critical breaches + simulated dispatches). This is naturally low-volume (a handful per day, not hundreds per refresh) so a full history here is safe.
 
+**Read back, not just written to.** Firestore isn't only a backup that sits unused — the app reads from it in two places:
+
+- **Cold-start recovery**: a fresh serverless instance starts with an empty in-memory cache, and the live NASA FIRMS refresh takes 10-15s. On startup the app loads the last known snapshot from Firestore (a sub-second query) and serves that immediately, while the live refresh runs in the background and takes over once it completes — so users see real recent data instead of the synthetic baseline generator during that window. It also seeds the in-memory persistence-tracking grid, so "persistent source" status doesn't wrongly reset to false just because the instance is new.
+- **Incident History panel** (the 🕐 icon in the header) — queries `GET /api/history/alerts`, which reads the `alerts` collection directly. Unlike the in-memory incident feed (capped at 20, lost on restart), this is a durable audit trail that survives cold starts.
+
 **Setup**: create a Firestore database in [Firebase Console](https://console.firebase.google.com/) (Standard edition, Production mode — the Admin SDK bypasses Firestore security rules entirely via a service account, so client-side rules stay locked down), then generate a service account key under **Project Settings → Service Accounts → Generate new private key** and set the three `FIREBASE_*` variables below. Without them, the app logs `[Firestore] Not configured` once at startup and continues running normally with in-memory-only storage.
 
 ---
@@ -295,7 +300,8 @@ $$R_{\text{blast}} = k \cdot \left( \frac{\text{Inventory}_{\text{vol}} \cdot \t
 | `POST`| `/api/thermal/refresh` | Force an immediate manual sync with NASA FIRMS satellites |
 | `GET` | `/api/thermal/live` | Returns live classified thermal anomalies (query params: `minFRP`, `severity`, `sector`, `classification`) |
 | `GET` | `/api/facilities` | Returns all registered industrial facilities and hazard metadata |
-| `GET` | `/api/alerts` | Returns all emergency dispatch notifications |
+| `GET` | `/api/alerts` | Returns current-session emergency dispatch notifications (in-memory, resets on restart) |
+| `GET` | `/api/history/alerts` | Returns durable alert history from Firestore (survives restarts); empty if Firestore isn't configured |
 | `POST`| `/api/alerts/dispatch` | Triggers an emergency response unit dispatch |
 | `POST`| `/api/ai/analyze-threat` | Generates a classification-aware tactical mitigation dossier using the selected AI provider |
 | `POST`| `/api/ai/chat` | Interactive incident command Q&A co-pilot for tactical decisions |

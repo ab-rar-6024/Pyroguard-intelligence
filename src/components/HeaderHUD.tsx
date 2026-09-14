@@ -11,7 +11,8 @@ import {
   Zap,
   Search,
   X,
-  HelpCircle
+  HelpCircle,
+  History
 } from 'lucide-react';
 import { ThermalAnomaly, EmergencyAlert } from '../types';
 
@@ -24,6 +25,7 @@ interface HeaderHUDProps {
   onOpenWidgets: () => void;
   onOpenIndiaCommand?: () => void;
   onOpenGlossary: () => void;
+  onOpenHistory: () => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
   selectedSeverity: string;
@@ -39,6 +41,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   onOpenWidgets,
   onOpenIndiaCommand,
   onOpenGlossary,
+  onOpenHistory,
   searchTerm,
   onSearchChange,
   selectedSeverity,
@@ -210,6 +213,15 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
             >
               <Code2 className="w-3.5 h-3.5 flex-shrink-0" />
               <span className="hidden md:inline">FastAPI</span>
+            </button>
+
+            {/* Durable Incident History (Firestore-backed) */}
+            <button
+              onClick={onOpenHistory}
+              title="Incident History (saved in Firebase, survives restarts)"
+              className="p-1.5 sm:p-2 rounded-lg bg-slate-900 border border-slate-800 text-amber-400 hover:text-amber-300 hover:border-amber-500/40 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Widget Layout Toggle */}

@@ -8,7 +8,8 @@ import {
   setNasaFirmsKey
 } from '../utils/nasaFirmsService.js';
 import { classifyThermalAnomaly } from '../utils/fireClassification.js';
-import { saveAlert } from '../utils/firestoreService.js';
+import { saveAlert, loadThermalSnapshot, loadPersistenceSeed, loadRecentAlerts, isFirestoreConfigured } from '../utils/firestoreService.js';
+import { seedFromSnapshot } from '../utils/persistenceTracker.js';
 
 // In-memory store for real-time alerts and satellite anomalies.
 // NOTE: on serverless platforms (e.g. Vercel) this only persists for the
@@ -184,8 +185,33 @@ function generateBaselineHotspots(): ThermalAnomaly[] {
   return hotspots;
 }
 
-// Initial baseline
+// Initial baseline (instant, synchronous fallback so the app never has an
+// empty cache while waiting on anything async).
 cachedAnomalies = generateBaselineHotspots();
+
+// Cold-start recovery: a fresh serverless instance has empty in-memory
+// state, but the live NASA FIRMS refresh takes 10-15s. Firestore (when
+// configured) answers in well under a second, so replace the synthetic
+// baseline with the last known real snapshot while live data loads in the
+// background, and seed persistence tracking so "persistent source" status
+// doesn't reset to false just because this instance is new.
+(async () => {
+  try {
+    const [snapshot, persistenceSeed] = await Promise.all([loadThermalSnapshot(), loadPersistenceSeed()]);
+    // Guard against a race with the live refresh: only apply the Firestore
+    // snapshot if a real refresh hasn't already completed by the time this
+    // resolves, so we never clobber fresher live data with older stored data.
+    if (snapshot.length > 0 && lastRefreshAt === 0) {
+      cachedAnomalies = snapshot;
+      console.log(`[Cold Start] Restored ${snapshot.length} hotspot(s) from Firestore while live data loads.`);
+    }
+    if (persistenceSeed.length > 0) {
+      seedFromSnapshot(persistenceSeed);
+    }
+  } catch {
+    // loadThermalSnapshot/loadPersistenceSeed already log their own errors.
+  }
+})();
 
 // Live NASA FIRMS Ingest Trigger
 async function refreshNASAData() {
@@ -232,7 +258,8 @@ export function createApp() {
       activeFacilities: GLOBAL_INDUSTRIAL_FACILITIES.length,
       activeAlerts: activeAlerts.length,
       firmsStatus,
-      groqConfigured: Boolean(process.env.GROQ_API_KEY)
+      groqConfigured: Boolean(process.env.GROQ_API_KEY),
+      firestoreConfigured: isFirestoreConfigured()
     });
   });
 
@@ -317,12 +344,25 @@ export function createApp() {
     });
   });
 
-  // GET /api/alerts - Return all emergency notifications
+  // GET /api/alerts - Return all emergency notifications (current session only)
   app.get('/api/alerts', (req: Request, res: Response) => {
     res.json({
       success: true,
       total: activeAlerts.length,
       data: activeAlerts
+    });
+  });
+
+  // GET /api/history/alerts - Durable alert history from Firestore, survives
+  // cold starts unlike the in-memory /api/alerts above. Empty if Firestore
+  // isn't configured.
+  app.get('/api/history/alerts', async (req: Request, res: Response) => {
+    const data = await loadRecentAlerts(100);
+    res.json({
+      success: true,
+      firestoreConfigured: isFirestoreConfigured(),
+      total: data.length,
+      data
     });
   });
 

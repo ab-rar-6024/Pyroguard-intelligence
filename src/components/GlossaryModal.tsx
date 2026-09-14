@@ -59,6 +59,10 @@ const TERMS: { term: string; plain: string; detail?: string }[] = [
     term: '"NASA Photo" Map Mode',
     plain: 'An actual satellite photograph of Earth, so you can visually see smoke and burn scars, not just data dots.',
     detail: 'Sourced from NASA (VIIRS Suomi-NPP), the same imagery NASA\'s own Worldview tool uses. Processing takes about a day, so it shows the most recent full day available, not this exact second - use the date arrows to check a clearer (less cloudy) day.'
+  },
+  {
+    term: 'Incident History',
+    plain: 'A permanent record of alerts and simulated dispatches, saved to a database (Firebase) so it survives server restarts — unlike the live map data, which resets periodically.'
   }
 ];
 
