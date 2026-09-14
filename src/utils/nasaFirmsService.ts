@@ -6,6 +6,18 @@ import { batchQueryLandCover, peekLandCoverCache } from './landCoverService.js';
 import { classifyThermalAnomaly } from './fireClassification.js';
 import { saveThermalSnapshot } from './firestoreService.js';
 
+// Hard cap on raw detections that go through the expensive per-detection
+// pipeline (nearest-of-71-facilities distance scan, wind/threat scoring,
+// alert-message templating) before curation trims it down to ~300 anyway.
+// NASA FIRMS detection volume varies wildly by day - normal refreshes have
+// seen roughly 1,000-2,500 raw detections this session, but a single
+// refresh was observed ingesting 63,010 (a global high-fire-activity day)
+// and that took long enough to trip a 45s timeout entirely on CPU-bound
+// synchronous processing, not network I/O. Sorting by FRP first and
+// capping keeps worst-case processing time bounded regardless of how much
+// data NASA returns, while still prioritizing the most intense fires.
+const MAX_RAW_DETECTIONS = 5000;
+
 // Cap on far-field (no nearby facility) hotspots NETWORK-queried against OSM
 // per refresh cycle, to keep the public Overpass endpoint call volume
 // bounded. Kept small and bounded: the public Overpass API has no SLA and is
@@ -272,12 +284,18 @@ export async function fetchLiveFIRMSHotspots(): Promise<{ anomalies: ThermalAnom
 
     console.log(`NASA FIRMS: Ingested ${rawDetections.length} raw real satellite thermal detections across ${successfulRegions.length} global regions.`);
 
+    let detectionsToProcess = rawDetections;
+    if (rawDetections.length > MAX_RAW_DETECTIONS) {
+      detectionsToProcess = [...rawDetections].sort((a, b) => b.frp - a.frp).slice(0, MAX_RAW_DETECTIONS);
+      console.log(`NASA FIRMS: Capped ${rawDetections.length} raw detections to the top ${MAX_RAW_DETECTIONS} by FRP before spatial matching.`);
+    }
+
     // Spatial matching against all industrial facilities
     const processedHotspots: ThermalAnomaly[] = [];
     const generatedAlerts: EmergencyAlert[] = [];
 
     // For each raw detection, find the closest industrial facility
-    rawDetections.forEach((raw, idx) => {
+    detectionsToProcess.forEach((raw, idx) => {
       let closestFac = GLOBAL_INDUSTRIAL_FACILITIES[0];
       let minDistance = 999999;
 
