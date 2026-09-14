@@ -224,18 +224,36 @@ cachedAnomalies = generateBaselineHotspots();
 })();
 
 // Live NASA FIRMS Ingest Trigger
+// Diagnostic-only, exposed via /api/health: since log streaming in this
+// environment has proven unreliable for catching what a refresh actually
+// did, record timing/errors directly and surface them through a response
+// we already know is reliable.
+let refreshDiagnostics: { startedAt: number | null; durationMs: number | null; error: string | null } = {
+  startedAt: null,
+  durationMs: null,
+  error: null
+};
+
 async function refreshNASAData() {
+  const startedAt = Date.now();
+  refreshDiagnostics = { startedAt, durationMs: null, error: null };
   console.log('[NASA FIRMS] Initiating live satellite telemetry scan...');
-  const result = await fetchLiveFIRMSHotspots();
-  if (result.anomalies && result.anomalies.length > 0) {
-    cachedAnomalies = result.anomalies;
-    if (result.alerts && result.alerts.length > 0) {
-      activeAlerts = [...result.alerts, ...activeAlerts].slice(0, 20);
-      await Promise.all(result.alerts.map(alert => saveAlert(alert)));
+  try {
+    const result = await fetchLiveFIRMSHotspots();
+    if (result.anomalies && result.anomalies.length > 0) {
+      cachedAnomalies = result.anomalies;
+      if (result.alerts && result.alerts.length > 0) {
+        activeAlerts = [...result.alerts, ...activeAlerts].slice(0, 20);
+        await Promise.all(result.alerts.map(alert => saveAlert(alert)));
+      }
+      console.log(`[NASA FIRMS] Live satellite anomalies updated (${cachedAnomalies.length} active thermal detections).`);
     }
-    console.log(`[NASA FIRMS] Live satellite anomalies updated (${cachedAnomalies.length} active thermal detections).`);
+    lastRefreshAt = Date.now();
+  } catch (err: any) {
+    refreshDiagnostics.error = err.message || String(err);
+  } finally {
+    refreshDiagnostics.durationMs = Date.now() - startedAt;
   }
-  lastRefreshAt = Date.now();
 }
 
 // Refresh if stale. Serverless functions have no background timers, so this
@@ -310,7 +328,8 @@ export function createApp() {
       activeAlerts: activeAlerts.length,
       firmsStatus,
       groqConfigured: Boolean(process.env.GROQ_API_KEY),
-      firestoreConfigured: isFirestoreConfigured()
+      firestoreConfigured: isFirestoreConfigured(),
+      refreshDiagnostics
     });
   });
 
