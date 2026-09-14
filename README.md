@@ -483,3 +483,11 @@ In the Vercel dashboard, go to **Project → Settings → Git** and connect the 
 
 This project is open-source under the [MIT License](LICENSE).
 Built with passion for emergency responders, industrial safety engineers, and disaster mitigation teams worldwide.
+
+## Roadmap Note
+Tracking future enhancements for satellite coverage in upcoming releases.
+
+
+
+## Roadmap Note
+Tracking future enhancements for satellite coverage in the changelog below.
