@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin } from 'lucide-react';
-import { EmergencyAlert, ThermalAnomaly, FireClassification } from '../types';
+import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin, Camera } from 'lucide-react';
+import { EmergencyAlert, ThermalAnomaly, FireClassification, FireReport } from '../types';
 import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
 interface IncidentHistoryModalProps {
   onClose: () => void;
 }
 
-type Tab = 'hotspots' | 'alerts';
+type Tab = 'hotspots' | 'alerts' | 'reports';
 
 // A facility beyond this distance wasn't actually used to classify the
 // hotspot (see NEAR_FACILITY_KM in nasaFirmsService.ts) - it's just the
@@ -26,6 +26,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
   const [hotspots, setHotspots] = useState<ThermalAnomaly[]>([]);
+  const [reports, setReports] = useState<FireReport[]>([]);
   const [byType, setByType] = useState<Record<string, number>>({});
   const [firestoreConfigured, setFirestoreConfigured] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -33,15 +34,17 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const [alertsRes, hotspotsRes] = await Promise.all([
+      const [alertsRes, hotspotsRes, reportsRes] = await Promise.all([
         fetch('/api/history/alerts').then((r) => r.json()),
-        fetch('/api/history/hotspots').then((r) => r.json())
+        fetch('/api/history/hotspots').then((r) => r.json()),
+        fetch('/api/reports/fire').then((r) => r.json())
       ]);
       if (alertsRes.success) setAlerts(alertsRes.data || []);
       if (hotspotsRes.success) {
         setHotspots(hotspotsRes.data || []);
         setByType(hotspotsRes.byType || {});
       }
+      if (reportsRes.success) setReports(reportsRes.data || []);
       setFirestoreConfigured(alertsRes.firestoreConfigured !== false);
     } catch (e) {
       console.error('Failed to load incident history:', e);
@@ -112,6 +115,16 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" /> Critical Alerts ({alerts.length})
+          </button>
+          <button
+            onClick={() => setTab('reports')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-colors cursor-pointer ${
+              tab === 'reports'
+                ? 'border-amber-500 text-amber-400 bg-slate-950'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" /> Citizen Reports ({reports.length})
           </button>
         </div>
 
@@ -261,7 +274,8 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
                 })}
               </>
             )
-          ) : alerts.length === 0 ? (
+          ) : tab === 'alerts' ? (
+            alerts.length === 0 ? (
             <div className="py-12 text-center text-slate-500 text-xs">
               No incidents recorded yet. Critical breaches and simulated dispatches will appear here once they happen.
             </div>
@@ -294,6 +308,46 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
                   <span>{alert.distanceKm.toFixed(1)} km / {alert.frpMW.toFixed(0)} MW</span>
                   <span>•</span>
                   <span className="text-emerald-400 font-bold">{alert.status}</span>
+                </div>
+              </div>
+            ))
+            )
+          ) : reports.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 text-xs">
+              No citizen reports yet. Use "Report Fire" in the navbar to log a sighting the satellite hasn't caught.
+            </div>
+          ) : (
+            reports.map((report) => (
+              <div
+                key={report.id}
+                className="rounded-xl bg-slate-900/60 border border-slate-800 overflow-hidden p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+                    {report.landmark || 'Citizen-reported sighting'}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/40">
+                    {report.status}
+                  </span>
+                </div>
+                <div className="flex gap-3">
+                  <img
+                    src={report.imageBase64}
+                    alt="Citizen-submitted fire sighting"
+                    className="w-24 h-24 object-cover rounded-lg border border-slate-800 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0 space-y-1">
+                    {report.description && (
+                      <p className="text-[11px] text-slate-300 leading-snug">{report.description}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}</span>
+                      <span>•</span>
+                      <span>{report.locationSource === 'gps' ? 'Live GPS location' : 'Picked on map'}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500">{new Date(report.reportedAt).toLocaleString()}</div>
+                  </div>
                 </div>
               </div>
             ))

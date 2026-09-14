@@ -1,14 +1,22 @@
 import express, { Request, Response } from 'express';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 import { calculateDistanceKm, evaluateWindRisk, calculateThreatScore, exportToGeoJSON, exportToCSV } from '../utils/gisCalculations.js';
-import { ThermalAnomaly, EmergencyAlert, LandCoverType } from '../types.js';
+import { ThermalAnomaly, EmergencyAlert, LandCoverType, FireReport } from '../types.js';
 import {
   fetchLiveFIRMSHotspots,
   getFIRMSStatus,
   setNasaFirmsKey
 } from '../utils/nasaFirmsService.js';
 import { classifyThermalAnomaly } from '../utils/fireClassification.js';
-import { saveAlert, loadThermalSnapshot, loadPersistenceSeed, loadRecentAlerts, isFirestoreConfigured } from '../utils/firestoreService.js';
+import {
+  saveAlert,
+  loadThermalSnapshot,
+  loadPersistenceSeed,
+  loadRecentAlerts,
+  isFirestoreConfigured,
+  saveFireReport,
+  loadRecentFireReports
+} from '../utils/firestoreService.js';
 import { seedFromSnapshot } from '../utils/persistenceTracker.js';
 
 // In-memory store for real-time alerts and satellite anomalies.
@@ -242,7 +250,10 @@ async function ensureFreshData(): Promise<void> {
 
 export function createApp() {
   const app = express();
-  app.use(express.json());
+  // Default 100kb limit is too small for a citizen fire report's attached
+  // photo (client-side compressed to well under 1MB, but base64 encoding
+  // adds ~33% overhead on top of that).
+  app.use(express.json({ limit: '3mb' }));
 
   // ================= API ROUTES =================
 
@@ -382,6 +393,65 @@ export function createApp() {
       firestoreConfigured: isFirestoreConfigured(),
       total: data.length,
       byType,
+      data
+    });
+  });
+
+  // POST /api/reports/fire - Citizen sighting of a fire the satellite
+  // hasn't (yet, or ever will) detect - VIIRS only registers thermal
+  // signatures large/hot enough to trip its sensor, revisits a given spot
+  // only a few times a day, and is blocked entirely by cloud cover. Ground
+  // truth from someone standing at the location fills that real gap.
+  app.post('/api/reports/fire', async (req: Request, res: Response) => {
+    const { latitude, longitude, locationSource, landmark, description, imageBase64 } = req.body;
+
+    if (typeof latitude !== 'number' || typeof longitude !== 'number' || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      return res.status(400).json({ success: false, error: 'A valid latitude and longitude are required.' });
+    }
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return res.status(400).json({ success: false, error: 'Latitude/longitude out of range.' });
+    }
+    if (locationSource !== 'gps' && locationSource !== 'map') {
+      return res.status(400).json({ success: false, error: 'locationSource must be "gps" or "map".' });
+    }
+    if (typeof imageBase64 !== 'string' || !imageBase64.startsWith('data:image/')) {
+      return res.status(400).json({ success: false, error: 'A reference photo is required to verify the report.' });
+    }
+    if (imageBase64.length > 2_000_000) {
+      return res.status(400).json({ success: false, error: 'Photo is too large - please retry (it should be auto-compressed).' });
+    }
+
+    if (!isFirestoreConfigured()) {
+      return res.status(503).json({ success: false, error: 'Firestore is not configured on this deployment, so reports cannot be durably stored right now.' });
+    }
+
+    const report: FireReport = {
+      id: `report-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      reportedAt: new Date().toISOString(),
+      latitude,
+      longitude,
+      locationSource,
+      landmark: typeof landmark === 'string' && landmark.trim() ? landmark.trim().slice(0, 200) : undefined,
+      description: typeof description === 'string' && description.trim() ? description.trim().slice(0, 1000) : undefined,
+      imageBase64,
+      status: 'NEW'
+    };
+
+    try {
+      await saveFireReport(report);
+      res.json({ success: true, data: report });
+    } catch (err: any) {
+      res.status(503).json({ success: false, error: err.message || 'Failed to save the report.' });
+    }
+  });
+
+  // GET /api/reports/fire - Recent citizen fire reports, newest first.
+  app.get('/api/reports/fire', async (req: Request, res: Response) => {
+    const data = await loadRecentFireReports(50);
+    res.json({
+      success: true,
+      firestoreConfigured: isFirestoreConfigured(),
+      total: data.length,
       data
     });
   });

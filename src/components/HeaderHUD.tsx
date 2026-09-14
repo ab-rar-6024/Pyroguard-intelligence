@@ -11,7 +11,8 @@ import {
   Search,
   X,
   HelpCircle,
-  History
+  History,
+  Camera
 } from 'lucide-react';
 import { ThermalAnomaly, EmergencyAlert } from '../types';
 
@@ -24,6 +25,7 @@ interface HeaderHUDProps {
   onOpenIndiaCommand?: () => void;
   onOpenGlossary: () => void;
   onOpenHistory: () => void;
+  onOpenReportFire: () => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
   selectedSeverity: string;
@@ -39,6 +41,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   onOpenIndiaCommand,
   onOpenGlossary,
   onOpenHistory,
+  onOpenReportFire,
   searchTerm,
   onSearchChange,
   selectedSeverity,
@@ -209,6 +212,16 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
               className="p-1.5 sm:p-2 rounded-lg bg-slate-900 border border-slate-800 text-amber-400 hover:text-amber-300 hover:border-amber-500/40 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
             >
               <History className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+
+            {/* Citizen fire sighting report - covers gaps the satellite misses */}
+            <button
+              onClick={onOpenReportFire}
+              title="Report a fire the satellite hasn't detected"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-orange-500/40 text-orange-400 hover:text-orange-300 text-xs font-semibold transition-colors min-h-[36px] cursor-pointer"
+            >
+              <Camera className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden md:inline">Report Fire</span>
             </button>
 
             {/* Widget Layout Toggle */}

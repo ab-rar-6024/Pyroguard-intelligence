@@ -101,6 +101,12 @@ Beyond raw hotspot detection, PyroGuard **classifies and segregates** what kind 
 - **FSI & ISRO Bhuvan Seasonal Stubble Burning & Heatwave Risk Matrix**: Tracking North India post-harvest crop fires (Oct-Nov) and Central India coalfield heatwave regimes (March-June).
 - **Bilingual Dual-Language Dispatch Engine (हिंदी Hindi & English)**: One-click generation of statutory Disaster Management Act 2005 evacuation and first-responder directives.
 
+### 11. 📸 Citizen Fire Reporting (Ground Truth) *(new)*
+- Satellite thermal detection has real gaps: VIIRS only revisits a given location a few times a day, needs a large/hot-enough signature to register, and is blocked entirely by cloud cover — a small or just-starting fire can go undetected for hours.
+- Anyone can report a fire sighting the satellite hasn't picked up yet, from the "Report Fire" button in the navbar: pin the location via live GPS or by clicking/dragging a marker on an embedded map, optionally add a landmark and description, and attach a required reference photo (auto-compressed client-side) so the sighting can be judged for authenticity.
+- Reports are durably stored in Firebase Firestore (`fireReports` collection, `POST`/`GET /api/reports/fire`) and surfaced back in the Incident History panel's **Citizen Reports** tab — a genuine write-then-read-back loop, not a one-way form.
+- Explicitly framed as a ground-truth cross-check, not an emergency dispatch — reports carry a clear disclaimer to contact real emergency services for life-threatening situations.
+
 ---
 
 ## 🔥 AI Fire Classification & Persistent Source Detection
@@ -141,11 +147,13 @@ PyroGuard's core data (cached anomalies, alerts, the persistence-tracking grid) 
 - **`thermalHotspots` collection** — one document per real-world hotspot location, keyed by the same ~5.5km grid cell used for in-process persistence tracking (see `gridKey()` in `persistenceTracker.ts`). Each refresh **upserts** the document in place rather than inserting a new one, so the collection size stays bounded to the number of distinct active hotspots (a few hundred), not an ever-growing history. Documents include latitude/longitude, FRP, brightness, satellite/confidence, wind speed & direction, the full `nearestFacility` block (name, type, distance, **threat/severity level**), and the full classification block (**fire type**, confidence, reasoning, persistence, land cover).
 - **Stale sweep** — hotspots not re-detected in 6 hours are deleted on the next refresh, so extinguished fires don't linger forever.
 - **`alerts` collection** — append-only, one document per alert (auto-generated critical breaches + simulated dispatches). This is naturally low-volume (a handful per day, not hundreds per refresh) so a full history here is safe.
+- **`fireReports` collection** — append-only, one document per citizen-submitted fire sighting (location, optional landmark/description, and a required reference photo stored as a compressed base64 string). Also naturally low-volume and each report is a distinct real-world event worth keeping permanently.
 
-**Read back, not just written to.** Firestore isn't only a backup that sits unused — the app reads from it in two places:
+**Read back, not just written to.** Firestore isn't only a backup that sits unused — the app reads from it in three places:
 
 - **Cold-start recovery**: a fresh serverless instance starts with an empty in-memory cache, and the live NASA FIRMS refresh takes 10-15s. On startup the app loads the last known snapshot from Firestore (a sub-second query) and serves that immediately, while the live refresh runs in the background and takes over once it completes — so users see real recent data instead of the synthetic baseline generator during that window. It also seeds the in-memory persistence-tracking grid, so "persistent source" status doesn't wrongly reset to false just because the instance is new.
-- **Incident History panel** (the 🕐 icon in the header) — queries `GET /api/history/alerts`, which reads the `alerts` collection directly. Unlike the in-memory incident feed (capped at 20, lost on restart), this is a durable audit trail that survives cold starts.
+- **Incident History panel** (the 🕐 icon in the header) — its "Critical Alerts" tab queries `GET /api/history/alerts` (the `alerts` collection) and its "All Fire Data" tab queries `GET /api/history/hotspots` (the `thermalHotspots` collection). Unlike the in-memory incident feed (capped at 20, lost on restart), these are durable views that survive cold starts.
+- **Citizen Reports tab** — queries `GET /api/reports/fire`, reading back every fire sighting submitted via the "Report Fire" button, complete with its photo.
 
 **Setup**: create a Firestore database in [Firebase Console](https://console.firebase.google.com/) (Standard edition, Production mode — the Admin SDK bypasses Firestore security rules entirely via a service account, so client-side rules stay locked down), then generate a service account key under **Project Settings → Service Accounts → Generate new private key** and set the three `FIREBASE_*` variables below. Without them, the app logs `[Firestore] Not configured` once at startup and continues running normally with in-memory-only storage.
 
@@ -302,7 +310,10 @@ $$R_{\text{blast}} = k \cdot \left( \frac{\text{Inventory}_{\text{vol}} \cdot \t
 | `GET` | `/api/facilities` | Returns all registered industrial facilities and hazard metadata |
 | `GET` | `/api/alerts` | Returns current-session emergency dispatch notifications (in-memory, resets on restart) |
 | `GET` | `/api/history/alerts` | Returns durable alert history from Firestore (survives restarts); empty if Firestore isn't configured |
+| `GET` | `/api/history/hotspots` | Returns every currently-stored thermal hotspot from Firestore, all fire types included, with a per-type breakdown |
 | `POST`| `/api/alerts/dispatch` | Triggers an emergency response unit dispatch |
+| `POST`| `/api/reports/fire` | Submits a citizen fire sighting (location, optional landmark/description, required reference photo) to Firestore |
+| `GET` | `/api/reports/fire` | Returns recent citizen-submitted fire reports, newest first |
 | `POST`| `/api/ai/analyze-threat` | Generates a classification-aware tactical mitigation dossier using the selected AI provider |
 | `POST`| `/api/ai/chat` | Interactive incident command Q&A co-pilot for tactical decisions |
 | `GET` | `/api/export/geojson` | Streams GeoJSON of all active threats and facilities, including fire classification fields |

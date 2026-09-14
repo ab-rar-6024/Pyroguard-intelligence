@@ -63,6 +63,11 @@ const TERMS: { term: string; plain: string; detail?: string }[] = [
   {
     term: 'Incident History',
     plain: 'A permanent record of alerts and simulated dispatches, saved to a database (Firebase) so it survives server restarts — unlike the live map data, which resets periodically.'
+  },
+  {
+    term: 'Report Fire (Citizen Reports)',
+    plain: 'A way for anyone to log a fire the satellite hasn\'t detected yet, with their location and a photo, saved permanently to Firebase.',
+    detail: 'Satellites like VIIRS only pass over a given spot a few times a day, need a large/hot enough signature to register, and can\'t see through cloud cover - so a small or just-starting fire can go unnoticed for hours. This lets someone on the ground close that gap.'
   }
 ];
 

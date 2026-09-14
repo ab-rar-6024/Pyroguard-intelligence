@@ -105,6 +105,25 @@ export interface EmergencyAlert {
   apparatusAssigned: string[];
 }
 
+// A citizen-submitted sighting of a fire the satellite hasn't (yet, or
+// ever will) pick up - VIIRS only detects thermal signatures large/hot
+// enough to register, revisits a given spot a few times a day, and is
+// blocked entirely by cloud cover, so a small or just-starting fire on the
+// ground can go undetected. Requires a location and a photo (for someone
+// reviewing it to judge whether it's genuine) - a landmark and free-text
+// description are optional context.
+export interface FireReport {
+  id: string;
+  reportedAt: string;
+  latitude: number;
+  longitude: number;
+  locationSource: 'gps' | 'map';
+  landmark?: string;
+  description?: string;
+  imageBase64: string;
+  status: 'NEW' | 'REVIEWED' | 'DISMISSED';
+}
+
 export interface NotificationThresholds {
   maxDistanceKm: number;
   minFrpMW: number;

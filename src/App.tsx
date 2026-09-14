@@ -12,6 +12,7 @@ import { CustomWidgetDrawer } from './components/CustomWidgetDrawer';
 import { IndiaCommandCenterModal } from './components/IndiaCommandCenterModal';
 import { GlossaryModal } from './components/GlossaryModal';
 import { IncidentHistoryModal } from './components/IncidentHistoryModal';
+import { ReportFireModal } from './components/ReportFireModal';
 import { 
   ThermalAnomaly, 
   IndustrialFacility, 
@@ -42,6 +43,7 @@ export default function App() {
   const [showIndiaModal, setShowIndiaModal] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showReportFire, setShowReportFire] = useState(false);
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -252,6 +254,7 @@ export default function App() {
         onOpenIndiaCommand={() => setShowIndiaModal(true)}
         onOpenGlossary={() => setShowGlossary(true)}
         onOpenHistory={() => setShowHistory(true)}
+        onOpenReportFire={() => setShowReportFire(true)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         selectedSeverity={selectedSeverity}
@@ -403,6 +406,11 @@ export default function App() {
       {/* Durable Incident History (Firestore-backed) */}
       {showHistory && (
         <IncidentHistoryModal onClose={() => setShowHistory(false)} />
+      )}
+
+      {/* Citizen fire sighting report - ground truth for gaps the satellite misses */}
+      {showReportFire && (
+        <ReportFireModal onClose={() => setShowReportFire(false)} />
       )}
 
       {/* Widget Layout Manager Drawer */}

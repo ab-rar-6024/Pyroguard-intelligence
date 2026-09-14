@@ -1,6 +1,6 @@
 import { App, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { Firestore, getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { ThermalAnomaly, EmergencyAlert, FireClassification, LandCoverType } from '../types.js';
+import { ThermalAnomaly, EmergencyAlert, FireClassification, LandCoverType, FireReport } from '../types.js';
 import { gridKey } from './persistenceTracker.js';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 
@@ -21,6 +21,7 @@ import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 
 const HOTSPOTS_COLLECTION = 'thermalHotspots';
 const ALERTS_COLLECTION = 'alerts';
+const REPORTS_COLLECTION = 'fireReports';
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours with no re-detection
 
 let app: App | null = null;
@@ -283,5 +284,54 @@ export async function saveAlert(alert: EmergencyAlert): Promise<void> {
     });
   } catch (err: any) {
     console.error('[Firestore] Failed to save alert:', err.message);
+  }
+}
+
+// Citizen fire reports - ground-truth sightings for fires too small, too
+// new, or too cloud-obscured for the satellite to have picked up yet.
+// Append-only (one document per report, like alerts): these are
+// low-volume, human-submitted, and each one is a distinct real-world
+// event worth keeping permanently, not a recurring detection to collapse
+// into a snapshot.
+export async function saveFireReport(report: FireReport): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('Firestore is not configured on this deployment.');
+
+  await firestore.collection(REPORTS_COLLECTION).doc(report.id).set({
+    reportedAt: report.reportedAt,
+    latitude: report.latitude,
+    longitude: report.longitude,
+    locationSource: report.locationSource,
+    landmark: report.landmark || null,
+    description: report.description || null,
+    imageBase64: report.imageBase64,
+    status: report.status,
+    createdAt: Timestamp.now()
+  });
+}
+
+export async function loadRecentFireReports(limit = 50): Promise<FireReport[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore.collection(REPORTS_COLLECTION).orderBy('createdAt', 'desc').limit(limit).get();
+    return snapshot.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        reportedAt: d.reportedAt,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        locationSource: d.locationSource,
+        landmark: d.landmark || undefined,
+        description: d.description || undefined,
+        imageBase64: d.imageBase64,
+        status: d.status
+      } as FireReport;
+    });
+  } catch (err: any) {
+    console.error('[Firestore] Failed to load fire reports:', err.message);
+    return [];
   }
 }
