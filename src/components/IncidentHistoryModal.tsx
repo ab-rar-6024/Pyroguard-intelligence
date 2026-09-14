@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { X, History, Database, AlertTriangle, RefreshCw } from 'lucide-react';
-import { EmergencyAlert } from '../types';
+import { X, History, Database, AlertTriangle, RefreshCw, Flame } from 'lucide-react';
+import { EmergencyAlert, ThermalAnomaly, FireClassification } from '../types';
+import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
 interface IncidentHistoryModalProps {
   onClose: () => void;
 }
 
+type Tab = 'hotspots' | 'alerts';
+
 export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onClose }) => {
+  const [tab, setTab] = useState<Tab>('hotspots');
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
+  const [hotspots, setHotspots] = useState<ThermalAnomaly[]>([]);
+  const [byType, setByType] = useState<Record<string, number>>({});
   const [firestoreConfigured, setFirestoreConfigured] = useState(true);
 
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/history/alerts');
-      const data = await res.json();
-      if (data.success) {
-        setAlerts(data.data || []);
-        setFirestoreConfigured(data.firestoreConfigured !== false);
+      const [alertsRes, hotspotsRes] = await Promise.all([
+        fetch('/api/history/alerts').then((r) => r.json()),
+        fetch('/api/history/hotspots').then((r) => r.json())
+      ]);
+      if (alertsRes.success) setAlerts(alertsRes.data || []);
+      if (hotspotsRes.success) {
+        setHotspots(hotspotsRes.data || []);
+        setByType(hotspotsRes.byType || {});
       }
+      setFirestoreConfigured(alertsRes.firestoreConfigured !== false);
     } catch (e) {
       console.error('Failed to load incident history:', e);
     } finally {
@@ -48,7 +58,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
                   <Database className="w-2.5 h-2.5" /> Firestore
                 </span>
               </h2>
-              <p className="text-[11px] text-slate-400">Durable record of alerts &amp; simulated dispatches - survives server restarts</p>
+              <p className="text-[11px] text-slate-400">Durable record of fire data &amp; simulated dispatches - survives server restarts</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -68,6 +78,30 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className="flex items-center gap-1 px-4 pt-3 border-b border-slate-800 bg-slate-900/40 flex-shrink-0">
+          <button
+            onClick={() => setTab('hotspots')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-colors cursor-pointer ${
+              tab === 'hotspots'
+                ? 'border-amber-500 text-amber-400 bg-slate-950'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" /> All Fire Data ({hotspots.length})
+          </button>
+          <button
+            onClick={() => setTab('alerts')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-colors cursor-pointer ${
+              tab === 'alerts'
+                ? 'border-amber-500 text-amber-400 bg-slate-950'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" /> Critical Alerts ({alerts.length})
+          </button>
+        </div>
+
         {/* Content */}
         <div className="p-4 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-800 space-y-2">
           {!firestoreConfigured && (
@@ -75,7 +109,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>
                 Firestore isn't configured on this deployment, so there's no durable history yet - only the current
-                session's alerts (visible in the incident feed) exist, and they'll be lost on the next restart.
+                session's data (visible on the live map) exists, and it'll be lost on the next restart.
                 Set <code className="bg-slate-900 px-1 rounded">FIREBASE_PROJECT_ID</code>,{' '}
                 <code className="bg-slate-900 px-1 rounded">FIREBASE_CLIENT_EMAIL</code>, and{' '}
                 <code className="bg-slate-900 px-1 rounded">FIREBASE_PRIVATE_KEY</code> to enable it.
@@ -85,6 +119,68 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
 
           {loading ? (
             <div className="py-12 text-center text-slate-500 text-xs">Loading history from Firestore...</div>
+          ) : tab === 'hotspots' ? (
+            hotspots.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-xs">
+                No fire data stored yet. Every classified thermal hotspot (industrial fire, gas flare, mining
+                thermal, wildfire, agricultural burn) is saved here on each refresh.
+              </div>
+            ) : (
+              <>
+                {/* Fire type breakdown */}
+                <div className="flex flex-wrap gap-1.5 pb-2 mb-1 border-b border-slate-800/60">
+                  {(Object.keys(byType) as FireClassification[]).map((type) => {
+                    const meta = CLASSIFICATION_META[type] || CLASSIFICATION_META.UNKNOWN;
+                    return (
+                      <span key={type} className={`px-2 py-1 rounded text-[10px] font-bold ${meta.badgeClass}`}>
+                        {meta.emoji} {meta.label}: {byType[type]}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {hotspots.map((h) => {
+                  const meta = CLASSIFICATION_META[h.classification?.classification || 'UNKNOWN'];
+                  return (
+                    <div key={h.id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-200">
+                          {h.nearestFacility?.facility.name || 'Unattributed location'}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${meta.badgeClass}`}>
+                          {meta.emoji} {meta.label}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
+                        <span>{h.latitude.toFixed(3)}, {h.longitude.toFixed(3)}</span>
+                        <span>•</span>
+                        <span>{h.frp.toFixed(0)} MW</span>
+                        <span>•</span>
+                        <span>{h.satellite}</span>
+                        {h.classification?.landCover && h.classification.landCover !== 'unknown' && (
+                          <>
+                            <span>•</span>
+                            <span className="capitalize">{h.classification.landCover}</span>
+                          </>
+                        )}
+                        {h.classification?.isPersistent && (
+                          <>
+                            <span>•</span>
+                            <span className="text-amber-400 font-bold">Persistent ({h.classification.occurrences}x)</span>
+                          </>
+                        )}
+                        {typeof h.classification?.confidence === 'number' && (
+                          <>
+                            <span>•</span>
+                            <span>{h.classification.confidence}% confidence</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )
           ) : alerts.length === 0 ? (
             <div className="py-12 text-center text-slate-500 text-xs">
               No incidents recorded yet. Critical breaches and simulated dispatches will appear here once they happen.

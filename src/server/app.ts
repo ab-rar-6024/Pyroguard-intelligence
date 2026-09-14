@@ -366,6 +366,26 @@ export function createApp() {
     });
   });
 
+  // GET /api/history/hotspots - Every currently-stored fire/thermal source in
+  // Firestore, all fire types included (industrial fire, gas flare, mining
+  // thermal, wildfire, agricultural burn, unknown) - not just the rare
+  // critical-breach alerts above.
+  app.get('/api/history/hotspots', async (req: Request, res: Response) => {
+    const data = await loadThermalSnapshot();
+    const byType: Record<string, number> = {};
+    for (const a of data) {
+      const type = a.classification?.classification || 'UNKNOWN';
+      byType[type] = (byType[type] || 0) + 1;
+    }
+    res.json({
+      success: true,
+      firestoreConfigured: isFirestoreConfigured(),
+      total: data.length,
+      byType,
+      data
+    });
+  });
+
   // POST /api/alerts/dispatch - Trigger simulated emergency response unit dispatch
   app.post('/api/alerts/dispatch', async (req: Request, res: Response) => {
     const { facilityId, anomalyId, customMessage, evacuationPerimeterKm } = req.body;
