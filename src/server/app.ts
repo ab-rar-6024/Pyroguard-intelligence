@@ -298,16 +298,19 @@ async function ensureFreshData(): Promise<void> {
   // dead page. The refresh itself keeps running in the background and
   // still updates the cache whenever it does settle.
   //
-  // 45s, not something tighter: the legitimate pipeline is sequential -
+  // 55s, not something tighter: the legitimate pipeline is sequential -
   // the multi-region FIRMS fetch (~10-12s, parallel across regions but
-  // each individually capped at 10s) then land-cover classification
-  // (up to ~12s, 2 rounds at a 6s cap each) then a Firestore batch write
-  // (a few seconds) - so a normal, un-hung refresh can legitimately take
-  // 25s+. A shorter backstop would routinely cut off healthy refreshes
-  // before they finish, making live data look broken when it isn't.
+  // each individually capped at 10s) then land-cover classification (up
+  // to ~12s, 2 rounds at a 6s cap each) then a Firestore batch write
+  // (its own 25s hard timeout - observed taking 8s+ under sustained
+  // free-tier throttling, well above what a healthy write should take)
+  // - so a normal, un-hung refresh can legitimately approach 50s under
+  // present conditions. Stay just under the 60s function maxDuration
+  // (vercel.json) so the platform itself never kills the invocation
+  // first.
   await Promise.race([
     refreshInFlight,
-    new Promise<void>((resolve) => setTimeout(resolve, 45000))
+    new Promise<void>((resolve) => setTimeout(resolve, 55000))
   ]);
 }
 

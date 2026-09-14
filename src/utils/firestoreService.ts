@@ -150,7 +150,7 @@ export async function saveThermalSnapshot(anomalies: ThermalAnomaly[]): Promise<
       console.error('[Firestore] Failed to save thermal snapshot:', err.message);
       return { ok: false, writes: 0, reason: err.message };
     }
-  })(), { ok: false, writes: 0, reason: 'timeout' }, 8000, 'saveThermalSnapshot');
+  })(), { ok: false, writes: 0, reason: 'timeout' }, 25000, 'saveThermalSnapshot');
 }
 
 async function sweepStaleHotspots(firestore: Firestore, currentKeys: Set<string>): Promise<void> {
