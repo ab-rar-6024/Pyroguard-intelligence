@@ -124,6 +124,44 @@ export async function queryLandCover(lat: number, lon: number): Promise<LandCove
   return 'unknown';
 }
 
+// Diagnostic-only: same request as queryLandCover but returns every
+// mirror's raw outcome instead of swallowing errors into 'unknown', and
+// never touches the cache. Used to answer "can this deployment's network
+// reach Overpass at all" from a live route instead of guessing from
+// aggregate classification stats.
+export async function queryLandCoverDebug(lat: number, lon: number): Promise<{ endpoint: string; ok: boolean; detail: string }[]> {
+  const query = `[out:json][timeout:5];(way(around:1500,${lat},${lon})["landuse"];way(around:1500,${lat},${lon})["natural"="wood"];);out tags 5;`;
+  const results: { endpoint: string; ok: boolean; detail: string }[] = [];
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    const startedAt = Date.now();
+    try {
+      const res = await fetchWithHardTimeout(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'PyroGuard-Fire-Intelligence/1.0 (industrial thermal monitoring app)',
+          'Accept': 'application/json'
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS)
+      }, OVERPASS_TIMEOUT_MS);
+
+      const tookMs = Date.now() - startedAt;
+      if (!res.ok) {
+        results.push({ endpoint, ok: false, detail: `HTTP ${res.status} after ${tookMs}ms` });
+        continue;
+      }
+      const data = await res.json();
+      results.push({ endpoint, ok: true, detail: `${(data.elements || []).length} elements in ${tookMs}ms` });
+    } catch (err: any) {
+      results.push({ endpoint, ok: false, detail: `${err.message} after ${Date.now() - startedAt}ms` });
+    }
+  }
+
+  return results;
+}
+
 // Concurrency-limited batch lookup so we never fire off hundreds of parallel
 // requests at the public Overpass endpoint in one refresh cycle.
 export async function batchQueryLandCover(
