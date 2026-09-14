@@ -6,7 +6,6 @@ import {
   Radio,
   Settings,
   Download,
-  Code2,
   Layers,
   Zap,
   Search,
@@ -21,7 +20,6 @@ interface HeaderHUDProps {
   alerts: EmergencyAlert[];
   onOpenThresholds: () => void;
   onOpenExport: () => void;
-  onOpenFastAPI: () => void;
   onOpenWidgets: () => void;
   onOpenIndiaCommand?: () => void;
   onOpenGlossary: () => void;
@@ -37,7 +35,6 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   alerts,
   onOpenThresholds,
   onOpenExport,
-  onOpenFastAPI,
   onOpenWidgets,
   onOpenIndiaCommand,
   onOpenGlossary,
@@ -203,16 +200,6 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
               <Download className="w-3.5 h-3.5 flex-shrink-0" />
               <span className="hidden xs:inline">Audit & GIS</span>
               <span className="xs:hidden">Export</span>
-            </button>
-
-            {/* FastAPI Python Backend Viewer */}
-            <button
-              onClick={onOpenFastAPI}
-              title="FastAPI Python Code"
-              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 text-xs font-mono transition-colors min-h-[36px]"
-            >
-              <Code2 className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="hidden md:inline">FastAPI</span>
             </button>
 
             {/* Durable Incident History (Firestore-backed) */}

@@ -248,7 +248,6 @@ export default function App() {
         alerts={alerts}
         onOpenThresholds={() => setShowThresholdsModal(true)}
         onOpenExport={() => setShowExportModal(true)}
-        onOpenFastAPI={() => setShowFastAPIModal(true)}
         onOpenWidgets={() => setShowWidgetsDrawer(true)}
         onOpenIndiaCommand={() => setShowIndiaModal(true)}
         onOpenGlossary={() => setShowGlossary(true)}
