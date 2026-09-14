@@ -255,9 +255,17 @@ async function ensureFreshData(): Promise<void> {
   // the wait so a stale-but-present cache is always served instead of a
   // dead page. The refresh itself keeps running in the background and
   // still updates the cache whenever it does settle.
+  //
+  // 45s, not something tighter: the legitimate pipeline is sequential -
+  // the multi-region FIRMS fetch (~10-12s, parallel across regions but
+  // each individually capped at 10s) then land-cover classification
+  // (up to ~12s, 2 rounds at a 6s cap each) then a Firestore batch write
+  // (a few seconds) - so a normal, un-hung refresh can legitimately take
+  // 25s+. A shorter backstop would routinely cut off healthy refreshes
+  // before they finish, making live data look broken when it isn't.
   await Promise.race([
     refreshInFlight,
-    new Promise<void>((resolve) => setTimeout(resolve, 20000))
+    new Promise<void>((resolve) => setTimeout(resolve, 45000))
   ]);
 }
 
