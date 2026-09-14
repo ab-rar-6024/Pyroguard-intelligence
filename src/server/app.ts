@@ -10,7 +10,6 @@ import {
 import { classifyThermalAnomaly } from '../utils/fireClassification.js';
 import { saveAlert, loadThermalSnapshot, loadPersistenceSeed, loadRecentAlerts, isFirestoreConfigured } from '../utils/firestoreService.js';
 import { seedFromSnapshot } from '../utils/persistenceTracker.js';
-import { queryLandCoverDebug } from '../utils/landCoverService.js';
 
 // In-memory store for real-time alerts and satellite anomalies.
 // NOTE: on serverless platforms (e.g. Vercel) this only persists for the
@@ -385,18 +384,6 @@ export function createApp() {
       byType,
       data
     });
-  });
-
-  // GET /api/debug/landcover - TEMPORARY diagnostic: proves whether this
-  // deployment's network can reach the public OSM Overpass service at all,
-  // since aggregate classification stats alone can't distinguish "every
-  // mirror is unreachable from here" from "just rate-limited sometimes".
-  // Safe to remove once the land-cover integration is confirmed working.
-  app.get('/api/debug/landcover', async (req: Request, res: Response) => {
-    const lat = parseFloat(req.query.lat as string) || 40.0;
-    const lon = parseFloat(req.query.lon as string) || -100.0;
-    const results = await queryLandCoverDebug(lat, lon);
-    res.json({ lat, lon, results });
   });
 
   // POST /api/alerts/dispatch - Trigger simulated emergency response unit dispatch
