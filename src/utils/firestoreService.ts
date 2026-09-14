@@ -146,6 +146,29 @@ async function sweepStaleHotspots(firestore: Firestore, currentKeys: Set<string>
   }
 }
 
+// Cheap (single-doc) read of how recently ANY serverless instance last
+// completed a successful refresh. Vercel functions don't share in-memory
+// state across instances - concurrent requests can land on separate cold
+// instances that each think they're the first to refresh, causing several
+// of them to hammer the NASA FIRMS API at once (observed: multiple
+// "Initiating live satellite telemetry scan" log lines seconds apart).
+// Firestore acts as the one clock every instance can actually agree on,
+// so ensureFreshData() checks this before starting its own live fetch.
+export async function getLatestSnapshotAgeMs(): Promise<number | null> {
+  const firestore = getDb();
+  if (!firestore) return null;
+
+  try {
+    const snapshot = await firestore.collection(HOTSPOTS_COLLECTION).orderBy('updatedAt', 'desc').limit(1).get();
+    if (snapshot.empty) return null;
+    const updatedAt = snapshot.docs[0].data().updatedAt;
+    return updatedAt?.toMillis ? Date.now() - updatedAt.toMillis() : null;
+  } catch (err: any) {
+    console.error('[Firestore] Failed to check latest snapshot age:', err.message);
+    return null;
+  }
+}
+
 // Reconstructs a ThermalAnomaly[] from the current Firestore snapshot -
 // used to recover from a cold start with real recent data instead of the
 // synthetic baseline generator, and to seed persistence tracking so

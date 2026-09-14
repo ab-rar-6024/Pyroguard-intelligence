@@ -16,7 +16,8 @@ import {
   isFirestoreConfigured,
   saveFireReport,
   loadRecentFireReports,
-  voteFireReport
+  voteFireReport,
+  getLatestSnapshotAgeMs
 } from '../utils/firestoreService.js';
 import { seedFromSnapshot } from '../utils/persistenceTracker.js';
 
@@ -241,7 +242,25 @@ async function refreshNASAData() {
 // is invoked lazily at the top of read routes instead of via setInterval.
 async function ensureFreshData(): Promise<void> {
   if (Date.now() - lastRefreshAt < REFRESH_TTL_MS) return;
+
   if (!refreshInFlight) {
+    // This instance thinks data is stale, but "lastRefreshAt" only lives in
+    // this instance's memory - on a cold start it's always 0, even if
+    // another instance completed a refresh moments ago. Check Firestore
+    // (shared across every instance) before joining the NASA fetch storm;
+    // if someone else already refreshed recently, adopt that snapshot
+    // directly rather than trusting the module-load cold-start IIFE to
+    // have already populated cachedAnomalies - that IIFE is fire-and-forget
+    // and can still be in flight when this runs.
+    const firestoreAgeMs = await getLatestSnapshotAgeMs();
+    if (firestoreAgeMs !== null && firestoreAgeMs < REFRESH_TTL_MS) {
+      const snapshot = await loadThermalSnapshot();
+      if (snapshot.length > 0) {
+        cachedAnomalies = snapshot;
+      }
+      lastRefreshAt = Date.now() - firestoreAgeMs;
+      return;
+    }
     refreshInFlight = refreshNASAData().finally(() => {
       refreshInFlight = null;
     });
