@@ -129,17 +129,43 @@ export const ReportFireModal: React.FC<ReportFireModalProps> = ({ onClose, onSub
       return;
     }
     setLocatingGps(true);
+
+    const onSuccess = (pos: GeolocationPosition) => {
+      setPosition({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      setLocationSource('gps');
+      setLocatingGps(false);
+    };
+
+    const describeError = (err: GeolocationPositionError) => {
+      if (err.code === err.PERMISSION_DENIED) {
+        return 'Location access was denied. Allow location for this site in your browser settings, or pick it on the map instead.';
+      }
+      return 'Could not get your live location (it may be slow indoors or on desktop). Please pick it on the map instead.';
+    };
+
+    // A GPS hardware fix (enableHighAccuracy) can take much longer than a
+    // typical timeout to lock, especially indoors or on a desktop with no
+    // GPS chip at all - that's the common cause of a timeout error here.
+    // Retry once with a coarser, much faster network/Wi-Fi-based fix (and a
+    // longer budget) before giving up and pointing the user at the map.
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPosition({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-        setLocationSource('gps');
-        setLocatingGps(false);
-      },
+      onSuccess,
       (err) => {
-        setGpsError(err.message || 'Could not get your location. Try picking it on the map instead.');
-        setLocatingGps(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsError(describeError(err));
+          setLocatingGps(false);
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          (err2) => {
+            setGpsError(describeError(err2));
+            setLocatingGps(false);
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
     );
   };
 
