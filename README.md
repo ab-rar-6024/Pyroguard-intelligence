@@ -8,6 +8,7 @@
 [![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-Overpass_API-7ebc6f.svg)](https://overpass-api.de/)
 [![Vercel](https://img.shields.io/badge/Deployed-Vercel-black.svg)](https://vercel.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ab-rar-6024/Pyroguard-intelligence/pulls)
 
 **PyroGuard** is an advanced, real-time industrial wildfire and thermal anomaly early-warning system. It correlates near-real-time satellite thermal detections from **NASA FIRMS** (VIIRS & MODIS) with high-hazard industrial infrastructure—such as oil refineries, LNG export terminals, chemical processing complexes, munitions depots, and nuclear power stations—to predict catastrophe risks, model explosive blast radii, project toxic downwind dispersion plumes, and provide tactical AI mitigation directives.
 
