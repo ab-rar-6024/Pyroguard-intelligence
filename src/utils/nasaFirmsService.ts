@@ -4,7 +4,15 @@ import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } f
 import { recordDetection, pruneStaleCells } from './persistenceTracker.js';
 import { batchQueryLandCover, peekLandCoverCache } from './landCoverService.js';
 import { classifyThermalAnomaly } from './fireClassification.js';
-import { saveThermalSnapshot } from './firestoreService.js';
+import { saveThermalSnapshot, SaveSnapshotResult } from './firestoreService.js';
+
+// Exposed via /api/health so a failing/timing-out Firestore write is
+// directly visible without needing log access, which has proven
+// unreliable for this deployment.
+let lastSnapshotSaveResult: SaveSnapshotResult | null = null;
+export function getLastSnapshotSaveResult(): SaveSnapshotResult | null {
+  return lastSnapshotSaveResult;
+}
 
 // Hard cap on raw detections that go through the expensive per-detection
 // pipeline (nearest-of-71-facilities distance scan, wind/threat scoring,
@@ -390,7 +398,7 @@ export async function fetchLiveFIRMSHotspots(): Promise<{ anomalies: ThermalAnom
     ];
 
     await classifyHotspots(curatedHotspots);
-    await saveThermalSnapshot(curatedHotspots);
+    lastSnapshotSaveResult = await saveThermalSnapshot(curatedHotspots);
 
     cachedRealAnomalies = curatedHotspots;
     isUsingRealData = true;

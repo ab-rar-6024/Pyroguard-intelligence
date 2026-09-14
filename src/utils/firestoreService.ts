@@ -117,11 +117,17 @@ function anomalyToDoc(anomaly: ThermalAnomaly) {
 
 // Upserts the current batch of classified hotspots as a snapshot, and sweeps
 // any previously-stored hotspot that hasn't been re-detected recently.
-export async function saveThermalSnapshot(anomalies: ThermalAnomaly[]): Promise<void> {
-  const firestore = getDb();
-  if (!firestore) return;
+export interface SaveSnapshotResult {
+  ok: boolean;
+  writes: number;
+  reason?: string;
+}
 
-  await withHardTimeout((async () => {
+export async function saveThermalSnapshot(anomalies: ThermalAnomaly[]): Promise<SaveSnapshotResult> {
+  const firestore = getDb();
+  if (!firestore) return { ok: false, writes: 0, reason: 'not configured' };
+
+  return withHardTimeout((async (): Promise<SaveSnapshotResult> => {
     try {
       const seenKeys = new Set<string>();
       const batch = firestore.batch();
@@ -139,10 +145,12 @@ export async function saveThermalSnapshot(anomalies: ThermalAnomaly[]): Promise<
       }
 
       await sweepStaleHotspots(firestore, seenKeys);
+      return { ok: true, writes };
     } catch (err: any) {
       console.error('[Firestore] Failed to save thermal snapshot:', err.message);
+      return { ok: false, writes: 0, reason: err.message };
     }
-  })(), undefined, 8000, 'saveThermalSnapshot');
+  })(), { ok: false, writes: 0, reason: 'timeout' }, 8000, 'saveThermalSnapshot');
 }
 
 async function sweepStaleHotspots(firestore: Firestore, currentKeys: Set<string>): Promise<void> {

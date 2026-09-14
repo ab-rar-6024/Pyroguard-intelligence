@@ -6,7 +6,8 @@ import { ThermalAnomaly, EmergencyAlert, LandCoverType, FireReport } from '../ty
 import {
   fetchLiveFIRMSHotspots,
   getFIRMSStatus,
-  setNasaFirmsKey
+  setNasaFirmsKey,
+  getLastSnapshotSaveResult
 } from '../utils/nasaFirmsService.js';
 import { classifyThermalAnomaly } from '../utils/fireClassification.js';
 import {
@@ -347,7 +348,8 @@ export function createApp() {
       firmsStatus,
       groqConfigured: Boolean(process.env.GROQ_API_KEY),
       firestoreConfigured: isFirestoreConfigured(),
-      refreshDiagnostics
+      refreshDiagnostics,
+      lastSnapshotSave: getLastSnapshotSaveResult()
     });
   });
 
