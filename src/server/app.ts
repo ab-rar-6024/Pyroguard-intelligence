@@ -224,10 +224,13 @@ cachedAnomalies = generateBaselineHotspots();
 })();
 
 // Live NASA FIRMS Ingest Trigger
-// Diagnostic-only, exposed via /api/health: since log streaming in this
-// environment has proven unreliable for catching what a refresh actually
-// did, record timing/errors directly and surface them through a response
-// we already know is reliable.
+// Lightweight ops visibility, exposed via /api/health: log streaming for
+// this deployment has proven unreliable for catching what a refresh cycle
+// actually did, so timing/errors are recorded directly here instead -
+// this is exactly what surfaced the two real causes of a production
+// hang (an unbounded per-detection loop on a high-volume day, and
+// Firestore quota exhaustion silently stalling via SDK retry/backoff).
+// Kept intentionally, not leftover debug scaffolding.
 let refreshDiagnostics: { startedAt: number | null; durationMs: number | null; error: string | null } = {
   startedAt: null,
   durationMs: null,
