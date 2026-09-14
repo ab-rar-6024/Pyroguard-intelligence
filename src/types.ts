@@ -122,6 +122,11 @@ export interface FireReport {
   description?: string;
   imageBase64: string;
   status: 'NEW' | 'REVIEWED' | 'DISMISSED';
+  // Crowdsourced cross-check: any other viewer of the Citizen Reports tab
+  // can vote on whether a sighting looks genuine, since there's no
+  // authority reviewing these otherwise.
+  confirmCount: number;
+  disputeCount: number;
 }
 
 export interface NotificationThresholds {

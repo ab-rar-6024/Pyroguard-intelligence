@@ -15,7 +15,8 @@ import {
   loadRecentAlerts,
   isFirestoreConfigured,
   saveFireReport,
-  loadRecentFireReports
+  loadRecentFireReports,
+  voteFireReport
 } from '../utils/firestoreService.js';
 import { seedFromSnapshot } from '../utils/persistenceTracker.js';
 
@@ -434,7 +435,9 @@ export function createApp() {
       landmark: typeof landmark === 'string' && landmark.trim() ? landmark.trim().slice(0, 200) : undefined,
       description: typeof description === 'string' && description.trim() ? description.trim().slice(0, 1000) : undefined,
       imageBase64,
-      status: 'NEW'
+      status: 'NEW',
+      confirmCount: 0,
+      disputeCount: 0
     };
 
     try {
@@ -454,6 +457,24 @@ export function createApp() {
       total: data.length,
       data
     });
+  });
+
+  // POST /api/reports/fire/:id/vote - Lets any other viewer of the Citizen
+  // Reports tab confirm or dispute a sighting, since there's no dedicated
+  // reviewer otherwise. Anonymous by design (this app has no auth); the
+  // client applies a soft one-vote-per-browser limit via localStorage.
+  app.post('/api/reports/fire/:id/vote', async (req: Request, res: Response) => {
+    const { type } = req.body;
+    if (type !== 'confirm' && type !== 'dispute') {
+      return res.status(400).json({ success: false, error: 'type must be "confirm" or "dispute".' });
+    }
+    try {
+      const counts = await voteFireReport(req.params.id, type);
+      if (!counts) return res.status(404).json({ success: false, error: 'Report not found.' });
+      res.json({ success: true, ...counts });
+    } catch (err: any) {
+      res.status(503).json({ success: false, error: err.message || 'Failed to record vote.' });
+    }
   });
 
   // POST /api/alerts/dispatch - Trigger simulated emergency response unit dispatch

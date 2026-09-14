@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin, Camera } from 'lucide-react';
+import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin, Camera, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { EmergencyAlert, ThermalAnomaly, FireClassification, FireReport } from '../types';
 import { CLASSIFICATION_META } from '../utils/classificationDisplay';
 
@@ -8,6 +8,29 @@ interface IncidentHistoryModalProps {
 }
 
 type Tab = 'hotspots' | 'alerts' | 'reports';
+
+// Anonymous, one-vote-per-browser soft limit for crowdsourced report
+// verification - this app has no user accounts, so localStorage is the
+// only client the vote can remember. Not abuse-proof, just enough to stop
+// a single click from being repeatable by accident.
+const VOTED_REPORTS_KEY = 'pyroguard_voted_reports';
+function getVotedReports(): Record<string, 'confirm' | 'dispute'> {
+  try {
+    return JSON.parse(localStorage.getItem(VOTED_REPORTS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+function setVotedReport(id: string, type: 'confirm' | 'dispute') {
+  try {
+    const current = getVotedReports();
+    current[id] = type;
+    localStorage.setItem(VOTED_REPORTS_KEY, JSON.stringify(current));
+  } catch {
+    // localStorage unavailable (private browsing, etc.) - vote still goes
+    // through server-side, it just won't be remembered for future visits.
+  }
+}
 
 // A facility beyond this distance wasn't actually used to classify the
 // hotspot (see NEAR_FACILITY_KM in nasaFirmsService.ts) - it's just the
@@ -30,6 +53,26 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
   const [byType, setByType] = useState<Record<string, number>>({});
   const [firestoreConfigured, setFirestoreConfigured] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [votedReports, setVotedReports] = useState<Record<string, 'confirm' | 'dispute'>>(() => getVotedReports());
+
+  const handleVote = async (reportId: string, type: 'confirm' | 'dispute') => {
+    if (votedReports[reportId]) return;
+    setVotedReports((prev) => ({ ...prev, [reportId]: type }));
+    setVotedReport(reportId, type);
+    try {
+      const res = await fetch(`/api/reports/fire/${reportId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, confirmCount: data.confirmCount, disputeCount: data.disputeCount } : r)));
+      }
+    } catch (e) {
+      console.error('Failed to record vote:', e);
+    }
+  };
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -348,6 +391,36 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
                     </div>
                     <div className="text-[10px] text-slate-500">{new Date(report.reportedAt).toLocaleString()}</div>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/60">
+                  <span className="text-[10px] text-slate-500 mr-1">Does this look real?</span>
+                  <button
+                    onClick={() => handleVote(report.id, 'confirm')}
+                    disabled={!!votedReports[report.id]}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                      votedReports[report.id] === 'confirm'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : votedReports[report.id]
+                        ? 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-emerald-500/40 hover:text-emerald-400 cursor-pointer'
+                    }`}
+                  >
+                    <ThumbsUp className="w-3 h-3" /> Looks Real ({report.confirmCount})
+                  </button>
+                  <button
+                    onClick={() => handleVote(report.id, 'dispute')}
+                    disabled={!!votedReports[report.id]}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                      votedReports[report.id] === 'dispute'
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                        : votedReports[report.id]
+                        ? 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-rose-500/40 hover:text-rose-400 cursor-pointer'
+                    }`}
+                  >
+                    <ThumbsDown className="w-3 h-3" /> Doubtful ({report.disputeCount})
+                  </button>
                 </div>
               </div>
             ))

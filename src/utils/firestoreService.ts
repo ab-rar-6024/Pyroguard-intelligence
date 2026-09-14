@@ -1,5 +1,5 @@
 import { App, cert, getApps, initializeApp } from 'firebase-admin/app';
-import { Firestore, getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { Firestore, getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { ThermalAnomaly, EmergencyAlert, FireClassification, LandCoverType, FireReport } from '../types.js';
 import { gridKey } from './persistenceTracker.js';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
@@ -306,8 +306,28 @@ export async function saveFireReport(report: FireReport): Promise<void> {
     description: report.description || null,
     imageBase64: report.imageBase64,
     status: report.status,
+    confirmCount: 0,
+    disputeCount: 0,
     createdAt: Timestamp.now()
   });
+}
+
+// Lets any other viewer of the Citizen Reports tab vote on whether a
+// sighting looks genuine - there's no human reviewer otherwise, so this is
+// the cross-check. FieldValue.increment is atomic, so concurrent votes
+// from different viewers can't race and clobber each other.
+export async function voteFireReport(id: string, type: 'confirm' | 'dispute'): Promise<{ confirmCount: number; disputeCount: number } | null> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('Firestore is not configured on this deployment.');
+
+  const ref = firestore.collection(REPORTS_COLLECTION).doc(id);
+  const field = type === 'confirm' ? 'confirmCount' : 'disputeCount';
+  await ref.update({ [field]: FieldValue.increment(1) });
+
+  const updated = await ref.get();
+  if (!updated.exists) return null;
+  const d = updated.data()!;
+  return { confirmCount: d.confirmCount || 0, disputeCount: d.disputeCount || 0 };
 }
 
 export async function loadRecentFireReports(limit = 50): Promise<FireReport[]> {
@@ -327,7 +347,9 @@ export async function loadRecentFireReports(limit = 50): Promise<FireReport[]> {
         landmark: d.landmark || undefined,
         description: d.description || undefined,
         imageBase64: d.imageBase64,
-        status: d.status
+        status: d.status,
+        confirmCount: d.confirmCount || 0,
+        disputeCount: d.disputeCount || 0
       } as FireReport;
     });
   } catch (err: any) {
