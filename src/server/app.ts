@@ -8,6 +8,7 @@ import {
   setNasaFirmsKey
 } from '../utils/nasaFirmsService.js';
 import { classifyThermalAnomaly } from '../utils/fireClassification.js';
+import { saveAlert } from '../utils/firestoreService.js';
 
 // In-memory store for real-time alerts and satellite anomalies.
 // NOTE: on serverless platforms (e.g. Vercel) this only persists for the
@@ -194,6 +195,7 @@ async function refreshNASAData() {
     cachedAnomalies = result.anomalies;
     if (result.alerts && result.alerts.length > 0) {
       activeAlerts = [...result.alerts, ...activeAlerts].slice(0, 20);
+      await Promise.all(result.alerts.map(alert => saveAlert(alert)));
     }
     console.log(`[NASA FIRMS] Live satellite anomalies updated (${cachedAnomalies.length} active thermal detections).`);
   }
@@ -324,8 +326,8 @@ export function createApp() {
     });
   });
 
-  // POST /api/alerts/dispatch - Trigger emergency response unit dispatch
-  app.post('/api/alerts/dispatch', (req: Request, res: Response) => {
+  // POST /api/alerts/dispatch - Trigger simulated emergency response unit dispatch
+  app.post('/api/alerts/dispatch', async (req: Request, res: Response) => {
     const { facilityId, anomalyId, customMessage, evacuationPerimeterKm } = req.body;
 
     const facility = GLOBAL_INDUSTRIAL_FACILITIES.find(f => f.id === facilityId);
@@ -353,10 +355,11 @@ export function createApp() {
     };
 
     activeAlerts.unshift(newAlert);
+    await saveAlert(newAlert);
 
     res.json({
       success: true,
-      message: 'Emergency responders successfully dispatched. Push notification broadcasted.',
+      message: 'Simulated dispatch logged. This does not contact any real emergency service.',
       alert: newAlert
     });
   });

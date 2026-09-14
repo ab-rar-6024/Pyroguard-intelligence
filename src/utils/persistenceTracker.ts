@@ -22,7 +22,9 @@ const GRID_SIZE_DEG = 0.05;
 const PERSISTENCE_MIN_OCCURRENCES = 3;
 const CELL_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-function gridKey(lat: number, lon: number): string {
+// Exported so other storage layers (e.g. Firestore) can key records by the
+// same real-world-location grid cell instead of a per-detection random id.
+export function gridKey(lat: number, lon: number): string {
   const gLat = Math.round(lat / GRID_SIZE_DEG) * GRID_SIZE_DEG;
   const gLon = Math.round(lon / GRID_SIZE_DEG) * GRID_SIZE_DEG;
   return `${gLat.toFixed(3)},${gLon.toFixed(3)}`;

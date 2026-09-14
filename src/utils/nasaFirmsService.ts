@@ -4,6 +4,7 @@ import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } f
 import { recordDetection, pruneStaleCells } from './persistenceTracker.js';
 import { batchQueryLandCover } from './landCoverService.js';
 import { classifyThermalAnomaly } from './fireClassification.js';
+import { saveThermalSnapshot } from './firestoreService.js';
 
 // Cap on far-field (no nearby facility) hotspots queried against OSM per
 // refresh cycle, to keep the public Overpass endpoint call volume bounded.
@@ -334,6 +335,7 @@ export async function fetchLiveFIRMSHotspots(): Promise<{ anomalies: ThermalAnom
     ];
 
     await classifyHotspots(curatedHotspots);
+    await saveThermalSnapshot(curatedHotspots);
 
     cachedRealAnomalies = curatedHotspots;
     isUsingRealData = true;

@@ -19,6 +19,7 @@ Beyond raw hotspot detection, PyroGuard **classifies and segregates** what kind 
 
 - [Key Features](#-key-features)
 - [AI Fire Classification & Persistent Source Detection](#-ai-fire-classification--persistent-source-detection)
+- [Persistent Storage (Firebase Firestore)](#-persistent-storage-firebase-firestore)
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
 - [AI Hazard & Incident Intelligence Co-Pilot](#-ai-hazard--incident-intelligence-co-pilot)
@@ -128,6 +129,20 @@ classification: {
 This is surfaced as color-coded badges on the map inspector, map popups, incident feed, and threat matrix; as a dedicated classification filter and distribution chart on the analytics dashboard; fed into the Groq AI prompt so tactical reports reference the actual classification; and included in every GeoJSON/CSV export for downstream GIS analysis.
 
 **Resilience note**: the Overpass API is a free, unauthenticated public service with no SLA. Land-cover lookups are capped (~16 per refresh), cached per grid cell, tried across three public mirrors, and hard-timed-out — if all of them are unavailable or rate-limited, classification gracefully falls back to FRP- and persistence-based heuristics rather than failing.
+
+---
+
+## 🔥🗄️ Persistent Storage (Firebase Firestore)
+
+PyroGuard's core data (cached anomalies, alerts, the persistence-tracking grid) lives in memory by default, which resets whenever a serverless instance cold-starts. An optional Firestore integration (`src/utils/firestoreService.ts`) gives it durable storage — entirely opt-in via environment variables; the app runs identically without it, just without persistence across cold starts.
+
+**Storage design — current snapshot, not an append-only log.** NASA FIRMS re-detects the same real-world fire on every satellite pass, and the app refreshes every 5 minutes. Naively appending every detection would generate tens of thousands of writes per day, blowing past Firestore's free-tier quota (20K writes/day) within hours. Instead:
+
+- **`thermalHotspots` collection** — one document per real-world hotspot location, keyed by the same ~5.5km grid cell used for in-process persistence tracking (see `gridKey()` in `persistenceTracker.ts`). Each refresh **upserts** the document in place rather than inserting a new one, so the collection size stays bounded to the number of distinct active hotspots (a few hundred), not an ever-growing history. Documents include latitude/longitude, FRP, brightness, satellite/confidence, wind speed & direction, the full `nearestFacility` block (name, type, distance, **threat/severity level**), and the full classification block (**fire type**, confidence, reasoning, persistence, land cover).
+- **Stale sweep** — hotspots not re-detected in 6 hours are deleted on the next refresh, so extinguished fires don't linger forever.
+- **`alerts` collection** — append-only, one document per alert (auto-generated critical breaches + simulated dispatches). This is naturally low-volume (a handful per day, not hundreds per refresh) so a full history here is safe.
+
+**Setup**: create a Firestore database in [Firebase Console](https://console.firebase.google.com/) (Standard edition, Production mode — the Admin SDK bypasses Firestore security rules entirely via a service account, so client-side rules stay locked down), then generate a service account key under **Project Settings → Service Accounts → Generate new private key** and set the three `FIREBASE_*` variables below. Without them, the app logs `[Firestore] Not configured` once at startup and continues running normally with in-memory-only storage.
 
 ---
 
@@ -309,6 +324,14 @@ HF_TOKEN=""
 
 # Platform hosting URL (Set automatically in production)
 APP_URL="http://localhost:3000"
+
+# Optional: Firebase Admin SDK (Firestore) - persists classified fire data
+# as a live snapshot (location, wind, severity, fire type). Without these,
+# the app runs normally but nothing is saved to Firestore.
+# From Firebase Console > Project Settings > Service Accounts > Generate new private key.
+FIREBASE_PROJECT_ID=""
+FIREBASE_CLIENT_EMAIL=""
+FIREBASE_PRIVATE_KEY=""
 ```
 
 > Note: OpenStreetMap land-cover lookups (used for fire classification) hit the free public Overpass API and require no API key.
@@ -368,6 +391,10 @@ The first run links the directory to a new Vercel project and auto-detects the V
 ```bash
 vercel env add GROQ_API_KEY production
 vercel env add NASA_FIRMS_MAP_KEY production
+# Optional - only if you've set up Firestore (see below):
+vercel env add FIREBASE_PROJECT_ID production
+vercel env add FIREBASE_CLIENT_EMAIL production
+vercel env add FIREBASE_PRIVATE_KEY production
 ```
 (repeat with `preview` for preview deployments) — or set them in the Vercel dashboard under **Project → Settings → Environment Variables**.
 
