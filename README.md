@@ -1,4 +1,9 @@
-# 🔥 PyroGuard Industrial Thermal & Fire Intelligence
+<div align="center">
+
+# 🔥 PyroGuard
+### Industrial Thermal & Fire Intelligence Platform
+
+**Real-time satellite fire detection meets AI-powered industrial hazard response.**
 
 [![React](https://img.shields.io/badge/React-19.0.1-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.2-blue.svg)](https://www.typescriptlang.org/)
@@ -10,10 +15,23 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ab-rar-6024/Pyroguard-intelligence/pulls)
 [![Maintained](https://img.shields.io/badge/Maintained-yes-brightgreen.svg)](https://github.com/ab-rar-6024/Pyroguard-intelligence/commits/main)
+[![Stars](https://img.shields.io/github/stars/ab-rar-6024/Pyroguard-intelligence?style=social)](https://github.com/ab-rar-6024/Pyroguard-intelligence/stargazers)
+
+[**🚀 Live Demo**](https://pyroguard.vercel.app) &nbsp;·&nbsp; [**📖 Docs**](#-table-of-contents) &nbsp;·&nbsp; [**🐛 Report a Bug**](https://github.com/ab-rar-6024/Pyroguard-intelligence/issues) &nbsp;·&nbsp; [**💬 Ask a Question**](https://github.com/ab-rar-6024/Pyroguard-intelligence/discussions)
+
+</div>
+
+---
 
 **PyroGuard** is an advanced, real-time industrial wildfire and thermal anomaly early-warning system. It correlates near-real-time satellite thermal detections from **NASA FIRMS** (VIIRS & MODIS) with high-hazard industrial infrastructure—such as oil refineries, LNG export terminals, chemical processing complexes, munitions depots, and nuclear power stations—to predict catastrophe risks, model explosive blast radii, project toxic downwind dispersion plumes, and provide tactical AI mitigation directives.
 
 Beyond raw hotspot detection, PyroGuard **classifies and segregates** what kind of thermal source each satellite detection actually is — an industrial fire, a gas flare, mining thermal activity, a wildfire, or an agricultural burn — by combining facility proximity, Fire Radiative Power patterns, cross-pass persistence, and OpenStreetMap land-cover context. This addresses the core gap in raw NASA FIRMS feeds: they detect heat, but don't tell you *what* is burning.
+
+<div align="center">
+
+**⭐ If PyroGuard is useful to you, consider starring the repo** — it helps other responders and engineers discover it.
+
+</div>
 
 ---
 
@@ -33,6 +51,10 @@ Beyond raw hotspot detection, PyroGuard **classifies and segregates** what kind 
 - [Available Scripts](#-available-scripts)
 - [Operational User Guide](#-operational-user-guide)
 - [Export Formats](#-export-formats)
+- [Roadmap](#-roadmap)
+- [Contributing](#-contributing)
+- [Star History](#-star-history)
+- [License](#-license)
 
 ---
 
@@ -481,15 +503,43 @@ In the Vercel dashboard, go to **Project → Settings → Git** and connect the 
 
 ---
 
+## 🗺️ Roadmap
+
+- [ ] Expand the India Bharat Hub facility registry to additional states
+- [ ] Historical trend analytics for persistent thermal sources over time
+- [ ] Mobile-optimized citizen fire reporting flow
+- [ ] Additional AI provider integrations
+
+Have an idea or found a gap? [Open a discussion](https://github.com/ab-rar-6024/Pyroguard-intelligence/discussions) or file an issue — see [Contributing](#-contributing) below.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome — a bug fix, a new facility entry, a new AI provider integration, or a documentation improvement all help.
+
+1. Fork the repo and create a branch: `git checkout -b feature/your-feature`
+2. Make your changes and commit: `git commit -m "Add your feature"`
+3. Push your branch and open a Pull Request
+
+Questions or design discussions belong in [Discussions](https://github.com/ab-rar-6024/Pyroguard-intelligence/discussions); bugs and concrete feature requests belong in [Issues](https://github.com/ab-rar-6024/Pyroguard-intelligence/issues).
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ab-rar-6024/Pyroguard-intelligence&type=Date)](https://star-history.com/#ab-rar-6024/Pyroguard-intelligence&Date)
+
+---
+
 ## 🛡️ License
 
 This project is open-source under the [MIT License](LICENSE).
-Built with passion for emergency responders, industrial safety engineers, and disaster mitigation teams worldwide.
 
-## Roadmap Note
-Tracking future enhancements for satellite coverage in upcoming releases.
+<div align="center">
 
+Built with 🔥 for emergency responders, industrial safety engineers, and disaster mitigation teams worldwide.
 
+[⬆ Back to top](#-pyroguard)
 
-## Roadmap Note
-Tracking future enhancements for satellite coverage in the changelog below.
+</div>
