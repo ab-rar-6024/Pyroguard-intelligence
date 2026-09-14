@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, History, Database, AlertTriangle, RefreshCw, Flame, ChevronDown, Wind, MapPin, Camera, ThumbsUp, ThumbsDown, Navigation, ExternalLink } from 'lucide-react';
 import { EmergencyAlert, ThermalAnomaly, FireClassification, FireReport } from '../types';
 import { CLASSIFICATION_META } from '../utils/classificationDisplay';
+import { apiUrl } from '../utils/apiBase';
 
 interface IncidentHistoryModalProps {
   onClose: () => void;
@@ -67,7 +68,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
     setVotedReports((prev) => ({ ...prev, [reportId]: type }));
     setVotedReport(reportId, type);
     try {
-      const res = await fetch(`/api/reports/fire/${reportId}/vote`, {
+      const res = await fetch(apiUrl(`/api/reports/fire/${reportId}/vote`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type })
@@ -85,9 +86,9 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
     setLoading(true);
     try {
       const [alertsRes, hotspotsRes, reportsRes] = await Promise.all([
-        fetch('/api/history/alerts').then((r) => r.json()),
-        fetch('/api/history/hotspots').then((r) => r.json()),
-        fetch('/api/reports/fire').then((r) => r.json())
+        fetch(apiUrl('/api/history/alerts')).then((r) => r.json()),
+        fetch(apiUrl('/api/history/hotspots')).then((r) => r.json()),
+        fetch(apiUrl('/api/reports/fire')).then((r) => r.json())
       ]);
       if (alertsRes.success) setAlerts(alertsRes.data || []);
       if (hotspotsRes.success) {

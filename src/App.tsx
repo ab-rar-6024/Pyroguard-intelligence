@@ -22,6 +22,7 @@ import {
   GISLayerConfig,
   WidgetVisibilityState
 } from './types';
+import { apiUrl } from './utils/apiBase';
 
 export default function App() {
   // State
@@ -94,9 +95,9 @@ export default function App() {
   const fetchData = useCallback(async () => {
     try {
       const [thermalRes, facRes, alertRes] = await Promise.all([
-        fetch('/api/thermal/live'),
-        fetch('/api/facilities'),
-        fetch('/api/alerts'),
+        fetch(apiUrl('/api/thermal/live')),
+        fetch(apiUrl('/api/facilities')),
+        fetch(apiUrl('/api/alerts')),
       ]);
 
       const [thermalData, facData, alertData] = await Promise.all([
@@ -124,7 +125,7 @@ export default function App() {
 
   const handleRefreshSatellites = async () => {
     try {
-      await fetch('/api/thermal/refresh', { method: 'POST' });
+      await fetch(apiUrl('/api/thermal/refresh'), { method: 'POST' });
       await fetchData();
     } catch (e) {
       console.error('Refresh satellites error:', e);
@@ -204,7 +205,7 @@ export default function App() {
     const { anomaly, facility, customMessage } = pendingDispatch;
     setDispatchSubmitting(true);
     try {
-      const res = await fetch('/api/alerts/dispatch', {
+      const res = await fetch(apiUrl('/api/alerts/dispatch'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

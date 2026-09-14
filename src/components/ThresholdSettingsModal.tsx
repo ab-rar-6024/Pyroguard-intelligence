@@ -16,6 +16,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { NotificationThresholds } from '../types';
+import { apiUrl } from '../utils/apiBase';
 
 interface ThresholdSettingsModalProps {
   thresholds: NotificationThresholds;
@@ -69,7 +70,7 @@ export const ThresholdSettingsModal: React.FC<ThresholdSettingsModalProps> = ({
       if (typeof window !== 'undefined') {
         localStorage.setItem('pyroguard_nasa_key', nasaKey.trim());
       }
-      const res = await fetch('/api/firms/key', {
+      const res = await fetch(apiUrl('/api/firms/key'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: nasaKey.trim() })

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Code2, Download, Copy, Check, Terminal, Play, Cpu } from 'lucide-react';
+import { apiUrl } from '../utils/apiBase';
 
 interface FastAPICodeViewerModalProps {
   onClose: () => void;
@@ -10,7 +11,7 @@ export const FastAPICodeViewerModal: React.FC<FastAPICodeViewerModalProps> = ({ 
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch('/api/export/python-code')
+    fetch(apiUrl('/api/export/python-code'))
       .then((res) => res.text())
       .then((txt) => setCode(txt))
       .catch((err) => {

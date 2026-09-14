@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { X, Flame, MapPin, Navigation, Camera, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { apiUrl } from '../utils/apiBase';
 
 interface ReportFireModalProps {
   onClose: () => void;
@@ -191,7 +192,7 @@ export const ReportFireModal: React.FC<ReportFireModalProps> = ({ onClose, onSub
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch('/api/reports/fire', {
+      const res = await fetch(apiUrl('/api/reports/fire'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

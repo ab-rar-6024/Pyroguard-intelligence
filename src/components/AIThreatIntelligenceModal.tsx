@@ -22,6 +22,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { ThermalAnomaly, IndustrialFacility, AIProvider, AIThreatAnalysisReport } from '../types';
+import { apiUrl } from '../utils/apiBase';
 
 interface AIThreatIntelligenceModalProps {
   anomaly: ThermalAnomaly;
@@ -118,7 +119,7 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
   const fetchAIAnalysis = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/analyze-threat', {
+      const res = await fetch(apiUrl('/api/ai/analyze-threat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -165,7 +166,7 @@ export const AIThreatIntelligenceModal: React.FC<AIThreatIntelligenceModalProps>
     setChatLoading(true);
 
     try {
-      const res = await fetch('/api/ai/chat', {
+      const res = await fetch(apiUrl('/api/ai/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

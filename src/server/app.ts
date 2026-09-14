@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import { GLOBAL_INDUSTRIAL_FACILITIES } from '../data/industrialDatabase.js';
 import { calculateDistanceKm, calculateBearingDeg, evaluateWindRisk, calculateThreatScore, exportToGeoJSON, exportToCSV } from '../utils/gisCalculations.js';
 import { ThermalAnomaly, EmergencyAlert, LandCoverType, FireReport } from '../types.js';
@@ -311,6 +312,20 @@ async function ensureFreshData(): Promise<void> {
 
 export function createApp() {
   const app = express();
+
+  // The Firebase Hosting mirror serves only the static frontend from a
+  // different origin (pyroguard-fire-intel.web.app /.firebaseapp.com) and
+  // calls this API cross-origin. The Vercel-hosted frontend is same-origin
+  // and unaffected either way.
+  app.use(cors({
+    origin: [
+      'https://pyroguard-fire-intel.web.app',
+      'https://pyroguard-fire-intel.firebaseapp.com',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ]
+  }));
+
   // Default 100kb limit is too small for a citizen fire report's attached
   // photo (client-side compressed to well under 1MB, but base64 encoding
   // adds ~33% overhead on top of that).
