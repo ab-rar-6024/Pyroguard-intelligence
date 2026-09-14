@@ -5,16 +5,16 @@ import { LandCoverType } from '../types.js';
 // a known industrial facility - per SIH PS 26162's requirement to integrate
 // "NASA FIRMS, OSM & Satellite Data".
 //
-// Primary source is the Mapbox Tilequery API (backed by OSM landuse data).
-// The public Overpass API mirrors below are kept only as a fallback for
-// deployments with no MAPBOX_ACCESS_TOKEN configured: measured in
-// production, all three Overpass mirrors are unreachable from this app's
-// Vercel deployment (connections hang at TCP/TLS connect and never
+// Tried in priority order: Geoapify Places API (GEOAPIFY_API_KEY, no card
+// required on its free tier) -> Mapbox Tilequery (MAPBOX_ACCESS_TOKEN) ->
+// public OSM Overpass mirrors as a last resort. The Overpass mirrors are
+// unreliable from this app's Vercel deployment: measured in production, all
+// three were unreachable (connections hang at TCP/TLS connect and never
 // complete - 0 successful lookups across a full session of live traffic),
-// which matches known behavior of free Overpass instances rate-limiting or
-// dropping connections from cloud/datacenter IP ranges. Mapbox's API is a
-// paid-tier-capable commercial service designed for exactly this kind of
-// programmatic, server-side traffic and has no such block.
+// which matches known behavior of free Overpass instances blocking or
+// dropping connections from cloud/datacenter IP ranges. Geoapify and Mapbox
+// are commercial services designed for exactly this kind of programmatic,
+// server-side traffic and have no such block.
 //
 // Bounded and cached deliberately regardless of source: this app may have
 // hundreds of far-field hotspots per refresh. Only a capped, prioritized
@@ -129,6 +129,59 @@ async function queryLandCoverMapbox(lat: number, lon: number, token: string): Pr
   return classifyFromMapboxFeatures(data.features || []);
 }
 
+// Geoapify's Places API is POI-based (named places, not raw OSM landuse
+// polygons), so this is a weaker signal than Mapbox/Overpass for plain
+// unnamed farmland - but it reliably catches forest, industrial and
+// residential/urban areas, and its free tier needs no credit card.
+const GEOAPIFY_CATEGORY_TO_LAND_COVER: Record<string, LandCoverType> = {
+  'natural.forest': 'forest',
+  'natural.heath_moor': 'forest',
+  'natural.protected_area': 'forest',
+  'natural.wetland': 'forest',
+  'commercial.food_and_drink.farm': 'farmland',
+  'building.industrial': 'industrial',
+  'production.factory': 'industrial',
+  'production.brewery': 'industrial',
+  'production.distillery': 'industrial',
+  'production.winery': 'industrial',
+  'building.residential': 'urban',
+  'building.commercial': 'urban',
+  'building.dormitory': 'urban',
+  'building.office': 'urban'
+};
+
+const GEOAPIFY_CATEGORIES = Object.keys(GEOAPIFY_CATEGORY_TO_LAND_COVER).join(',');
+const GEOAPIFY_TIMEOUT_MS = 6000;
+const GEOAPIFY_QUERY_RADIUS_M = 1500;
+
+function classifyFromGeoapifyFeatures(features: Array<{ properties?: Record<string, any> }>): LandCoverType {
+  const tagCounts: Record<LandCoverType, number> = { forest: 0, farmland: 0, industrial: 0, urban: 0, unknown: 0 };
+
+  for (const f of features) {
+    const categories: string[] = f.properties?.categories || [];
+    for (const cat of categories) {
+      const mapped = GEOAPIFY_CATEGORY_TO_LAND_COVER[cat];
+      if (mapped) tagCounts[mapped]++;
+    }
+  }
+
+  const sorted = (Object.entries(tagCounts) as [LandCoverType, number][]).sort((a, b) => b[1] - a[1]);
+  return sorted[0][1] > 0 ? sorted[0][0] : 'unknown';
+}
+
+async function queryLandCoverGeoapify(lat: number, lon: number, apiKey: string): Promise<LandCoverType> {
+  const url = `https://api.geoapify.com/v2/places?categories=${GEOAPIFY_CATEGORIES}` +
+    `&filter=circle:${lon},${lat},${GEOAPIFY_QUERY_RADIUS_M}&limit=10&apiKey=${apiKey}`;
+
+  const res = await fetchWithHardTimeout(url, {
+    signal: AbortSignal.timeout(GEOAPIFY_TIMEOUT_MS)
+  }, GEOAPIFY_TIMEOUT_MS);
+
+  if (!res.ok) throw new Error(`Geoapify Places status ${res.status}`);
+  const data = await res.json();
+  return classifyFromGeoapifyFeatures(data.features || []);
+}
+
 // Multiple public Overpass mirrors, raced in parallel. Kept only as a
 // fallback for deployments without MAPBOX_ACCESS_TOKEN configured - see the
 // file-level comment for why these are unreliable from serverless/cloud
@@ -185,12 +238,15 @@ export async function queryLandCover(lat: number, lon: number): Promise<LandCove
     return cached.type;
   }
 
+  const geoapifyKey = process.env.GEOAPIFY_API_KEY;
   const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
 
   try {
-    const type = mapboxToken
-      ? await queryLandCoverMapbox(lat, lon, mapboxToken)
-      : await queryLandCoverOverpass(lat, lon);
+    const type = geoapifyKey
+      ? await queryLandCoverGeoapify(lat, lon, geoapifyKey)
+      : mapboxToken
+        ? await queryLandCoverMapbox(lat, lon, mapboxToken)
+        : await queryLandCoverOverpass(lat, lon);
     cache.set(key, { type, expiresAt: Date.now() + SUCCESS_TTL_MS });
     return type;
   } catch (err: any) {

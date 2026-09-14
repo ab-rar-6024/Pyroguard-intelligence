@@ -328,12 +328,18 @@ OPENROUTER_API_KEY=""
 # Optional: Hugging Face User Access Token for Serverless Inference
 HF_TOKEN=""
 
-# Mapbox Access Token - used to resolve land cover (forest/farmland/
-# industrial/urban) for fires with no nearby industrial facility, via the
-# Mapbox Tilequery API. Free tier: 100k requests/month.
-# Get one at https://account.mapbox.com/access-tokens/
-# Without this, land cover falls back to the free public OSM Overpass API,
-# which is unreliable (often unreachable) from serverless/cloud deployments.
+# Geoapify API Key - used to resolve land cover (forest/farmland/industrial/
+# urban) for fires with no nearby industrial facility, via the Geoapify
+# Places API. Free tier: 3,000 requests/day, no credit card required.
+# Get one at https://myprojects.geoapify.com/
+GEOAPIFY_API_KEY=""
+
+# Optional: Mapbox Access Token - alternative land-cover source, used only if
+# GEOAPIFY_API_KEY isn't set. Free tier: 100k requests/month, but requires a
+# card on file. Get one at https://account.mapbox.com/access-tokens/
+# If neither key is set, land cover falls back to the free public OSM
+# Overpass API, which is unreliable (often unreachable) from serverless/cloud
+# deployments.
 MAPBOX_ACCESS_TOKEN=""
 
 # Platform hosting URL (Set automatically in production)
@@ -348,7 +354,7 @@ FIREBASE_CLIENT_EMAIL=""
 FIREBASE_PRIVATE_KEY=""
 ```
 
-> Note: Land-cover lookups (used for fire classification) use the Mapbox Tilequery API when `MAPBOX_ACCESS_TOKEN` is set. Without it, they fall back to the free public OSM Overpass API, which is frequently unreachable from serverless/cloud IP ranges (mirrors block/drop that traffic) — in that case most far-field fires will show as "Unclassified". Setting `MAPBOX_ACCESS_TOKEN` is strongly recommended for any deployment.
+> Note: Land-cover lookups (used for fire classification) try `GEOAPIFY_API_KEY` first, then `MAPBOX_ACCESS_TOKEN`. Without either set, they fall back to the free public OSM Overpass API, which is frequently unreachable from serverless/cloud IP ranges (mirrors block/drop that traffic) — in that case most far-field fires will show as "Unclassified". Setting `GEOAPIFY_API_KEY` is strongly recommended for any deployment (free, no card required).
 
 `dotenv` is loaded explicitly at server startup (`import 'dotenv/config'`), so `.env` is read automatically by both `npm run dev` and the Vercel serverless function — no extra setup needed beyond creating the file.
 
@@ -405,7 +411,7 @@ The first run links the directory to a new Vercel project and auto-detects the V
 ```bash
 vercel env add GROQ_API_KEY production
 vercel env add NASA_FIRMS_MAP_KEY production
-vercel env add MAPBOX_ACCESS_TOKEN production
+vercel env add GEOAPIFY_API_KEY production
 # Optional - only if you've set up Firestore (see below):
 vercel env add FIREBASE_PROJECT_ID production
 vercel env add FIREBASE_CLIENT_EMAIL production
