@@ -22,7 +22,7 @@ const GRID_SIZE_DEG = 0.05;
 const PERSISTENCE_MIN_OCCURRENCES = 3;
 const CELL_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-// Exported so other storage layers (e.g. Firestore) can key records by the
+// Exported so other storage layers (e.g. the database) can key records by the
 // same real-world-location grid cell instead of a per-detection random id.
 export function gridKey(lat: number, lon: number): string {
   const gLat = Math.round(lat / GRID_SIZE_DEG) * GRID_SIZE_DEG;
@@ -56,7 +56,7 @@ export function recordDetection(lat: number, lon: number, frp: number): Persiste
   return { isPersistent: false, occurrences: 1, firstSeenAt: new Date(now).toISOString() };
 }
 
-// Seeds the grid from a durable source (Firestore) on a cold start, so
+// Seeds the grid from a durable source (the database) on a cold start, so
 // "persistent source" status doesn't wrongly reset to false just because
 // this serverless instance is new. Only fills cells not already tracked -
 // never overwrites live in-memory state.

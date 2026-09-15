@@ -205,7 +205,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
               <span className="xs:hidden">Export</span>
             </button>
 
-            {/* Durable Incident History (Firestore-backed) */}
+            {/* Durable Incident History (Supabase-backed) */}
             <button
               onClick={onOpenHistory}
               title="Incident History (saved in Firebase, survives restarts)"

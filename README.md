@@ -39,7 +39,7 @@ Beyond raw hotspot detection, PyroGuard **classifies and segregates** what kind 
 
 - [Key Features](#-key-features)
 - [AI Fire Classification & Persistent Source Detection](#-ai-fire-classification--persistent-source-detection)
-- [Persistent Storage (Firebase Firestore)](#-persistent-storage-firebase-firestore)
+- [Persistent Storage (Supabase / Postgres)](#-persistent-storage-supabase--postgres)
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
 - [AI Hazard & Incident Intelligence Co-Pilot](#-ai-hazard--incident-intelligence-co-pilot)
@@ -128,7 +128,7 @@ Beyond raw hotspot detection, PyroGuard **classifies and segregates** what kind 
 ### 11. 📸 Citizen Fire Reporting (Ground Truth) *(new)*
 - Satellite thermal detection has real gaps: VIIRS only revisits a given location a few times a day, needs a large/hot-enough signature to register, and is blocked entirely by cloud cover — a small or just-starting fire can go undetected for hours.
 - Anyone can report a fire sighting the satellite hasn't picked up yet, from the "Report Fire" button in the navbar: pin the location via live GPS or by clicking/dragging a marker on an embedded map, optionally add a landmark and description, and attach a required reference photo (auto-compressed client-side) so the sighting can be judged for authenticity.
-- Reports are durably stored in Firebase Firestore (`fireReports` collection, `POST`/`GET /api/reports/fire`) and surfaced back in the Incident History panel's **Citizen Reports** tab — a genuine write-then-read-back loop, not a one-way form.
+- Reports are durably stored in Supabase (`fire_reports` table, `POST`/`GET /api/reports/fire`) and surfaced back in the Incident History panel's **Citizen Reports** tab — a genuine write-then-read-back loop, not a one-way form.
 - Explicitly framed as a ground-truth cross-check, not an emergency dispatch — reports carry a clear disclaimer to contact real emergency services for life-threatening situations.
 
 ---
@@ -162,24 +162,26 @@ This is surfaced as color-coded badges on the map inspector, map popups, inciden
 
 ---
 
-## 🔥🗄️ Persistent Storage (Firebase Firestore)
+## 🔥🗄️ Persistent Storage (Supabase / Postgres)
 
-PyroGuard's core data (cached anomalies, alerts, the persistence-tracking grid) lives in memory by default, which resets whenever a serverless instance cold-starts. An optional Firestore integration (`src/utils/firestoreService.ts`) gives it durable storage — entirely opt-in via environment variables; the app runs identically without it, just without persistence across cold starts.
+PyroGuard's core data (cached anomalies, alerts, the persistence-tracking grid) lives in memory by default, which resets whenever a serverless instance cold-starts. An optional Supabase integration (`src/utils/supabaseService.ts`) gives it durable storage — entirely opt-in via environment variables; the app runs identically without it, just without persistence across cold starts.
 
-**Storage design — current snapshot, not an append-only log.** NASA FIRMS re-detects the same real-world fire on every satellite pass, and the app refreshes every 5 minutes. Naively appending every detection would generate tens of thousands of writes per day, blowing past Firestore's free-tier quota (20K writes/day) within hours. Instead:
+This project originally used Firebase Firestore, and migrated to Supabase because Firestore's free (Spark) tier hard-quotas at 20K writes/day - and this app's own routine operation (upserting ~180-300 hotspot rows every 5-minute refresh) structurally exceeds that on its own under continuous use, independent of traffic or testing volume. Supabase's free tier has no equivalent per-write-operation daily quota; its constraints are database storage (500MB, far more than this app's small current-snapshot dataset needs) and compute/connections, and a single upsert call writes every row in one request rather than being billed per row.
 
-- **`thermalHotspots` collection** — one document per real-world hotspot location, keyed by the same ~5.5km grid cell used for in-process persistence tracking (see `gridKey()` in `persistenceTracker.ts`). Each refresh **upserts** the document in place rather than inserting a new one, so the collection size stays bounded to the number of distinct active hotspots (a few hundred), not an ever-growing history. Documents include latitude/longitude, FRP, brightness, satellite/confidence, wind speed & direction, the full `nearestFacility` block (name, type, distance, **threat/severity level**), and the full classification block (**fire type**, confidence, reasoning, persistence, land cover).
+**Storage design — current snapshot, not an append-only log.** NASA FIRMS re-detects the same real-world fire on every satellite pass, and the app refreshes every 5 minutes. Naively appending every detection would grow the table forever for no benefit. Instead:
+
+- **`thermal_hotspots` table** — one row per real-world hotspot location, keyed by the same ~5.5km grid cell used for in-process persistence tracking (see `gridKey()` in `persistenceTracker.ts`). Each refresh **upserts** the row in place (`ON CONFLICT (grid_key)`) rather than inserting a new one, so the table size stays bounded to the number of distinct active hotspots (a few hundred), not an ever-growing history. Rows include latitude/longitude, FRP, brightness, satellite/confidence, wind speed & direction, the full `nearest_facility` JSONB block (name, type, distance, **threat/severity level**), and the full classification block (**fire type**, confidence, reasoning, persistence, land cover).
 - **Stale sweep** — hotspots not re-detected in 6 hours are deleted on the next refresh, so extinguished fires don't linger forever.
-- **`alerts` collection** — append-only, one document per alert (auto-generated critical breaches + simulated dispatches). This is naturally low-volume (a handful per day, not hundreds per refresh) so a full history here is safe.
-- **`fireReports` collection** — append-only, one document per citizen-submitted fire sighting (location, optional landmark/description, and a required reference photo stored as a compressed base64 string). Also naturally low-volume and each report is a distinct real-world event worth keeping permanently.
+- **`alerts` table** — append-only, one row per alert (auto-generated critical breaches + simulated dispatches). This is naturally low-volume (a handful per day, not hundreds per refresh) so a full history here is safe.
+- **`fire_reports` table** — append-only, one row per citizen-submitted fire sighting (location, optional landmark/description, and a required reference photo stored as a compressed base64 string), plus a crowdsourced "Looks Real" / "Doubtful" vote count updated atomically via the `increment_report_vote` SQL function. Also naturally low-volume and each report is a distinct real-world event worth keeping permanently.
 
-**Read back, not just written to.** Firestore isn't only a backup that sits unused — the app reads from it in three places:
+**Read back, not just written to.** The database isn't only a backup that sits unused — the app reads from it in three places:
 
-- **Cold-start recovery**: a fresh serverless instance starts with an empty in-memory cache, and the live NASA FIRMS refresh takes 10-15s. On startup the app loads the last known snapshot from Firestore (a sub-second query) and serves that immediately, while the live refresh runs in the background and takes over once it completes — so users see real recent data instead of the synthetic baseline generator during that window. It also seeds the in-memory persistence-tracking grid, so "persistent source" status doesn't wrongly reset to false just because the instance is new.
-- **Incident History panel** (the 🕐 icon in the header) — its "Critical Alerts" tab queries `GET /api/history/alerts` (the `alerts` collection) and its "All Fire Data" tab queries `GET /api/history/hotspots` (the `thermalHotspots` collection). Unlike the in-memory incident feed (capped at 20, lost on restart), these are durable views that survive cold starts.
-- **Citizen Reports tab** — queries `GET /api/reports/fire`, reading back every fire sighting submitted via the "Report Fire" button, complete with its photo.
+- **Cold-start recovery**: a fresh serverless instance starts with an empty in-memory cache, and the live NASA FIRMS refresh takes 10-15s. On startup the app loads the last known snapshot from Supabase (a sub-second query) and serves that immediately, while the live refresh runs in the background and takes over once it completes — so users see real recent data instead of the synthetic baseline generator during that window. It also seeds the in-memory persistence-tracking grid, so "persistent source" status doesn't wrongly reset to false just because the instance is new.
+- **Incident History panel** (the 🕐 icon in the header) — its "Critical Alerts" tab queries `GET /api/history/alerts` (the `alerts` table) and its "All Fire Data" tab queries `GET /api/history/hotspots` (the `thermal_hotspots` table). Unlike the in-memory incident feed (capped at 20, lost on restart), these are durable views that survive cold starts.
+- **Citizen Reports tab** — queries `GET /api/reports/fire`, reading back every fire sighting submitted via the "Report Fire" button, complete with its photo and crowdsourced vote counts.
 
-**Setup**: create a Firestore database in [Firebase Console](https://console.firebase.google.com/) (Standard edition, Production mode — the Admin SDK bypasses Firestore security rules entirely via a service account, so client-side rules stay locked down), then generate a service account key under **Project Settings → Service Accounts → Generate new private key** and set the three `FIREBASE_*` variables below. Without them, the app logs `[Firestore] Not configured` once at startup and continues running normally with in-memory-only storage.
+**Setup**: create a project at [supabase.com](https://supabase.com), open the SQL Editor and run `supabase/schema.sql` once (creates the three tables, indexes, and the vote-increment function), then get the URL and **service_role** key from **Project Settings → API** and set the two `SUPABASE_*` variables below. The service_role key bypasses Row Level Security server-side — the same way the app previously used the Firebase Admin SDK to bypass Firestore rules — so keep it server-side only, never in client code. Without these set, the app logs `[Supabase] Not configured` once at startup and continues running normally with in-memory-only storage.
 
 ---
 
@@ -333,10 +335,10 @@ $$R_{\text{blast}} = k \cdot \left( \frac{\text{Inventory}_{\text{vol}} \cdot \t
 | `GET` | `/api/thermal/live` | Returns live classified thermal anomalies (query params: `minFRP`, `severity`, `sector`, `classification`) |
 | `GET` | `/api/facilities` | Returns all registered industrial facilities and hazard metadata |
 | `GET` | `/api/alerts` | Returns current-session emergency dispatch notifications (in-memory, resets on restart) |
-| `GET` | `/api/history/alerts` | Returns durable alert history from Firestore (survives restarts); empty if Firestore isn't configured |
-| `GET` | `/api/history/hotspots` | Returns every currently-stored thermal hotspot from Firestore, all fire types included, with a per-type breakdown |
+| `GET` | `/api/history/alerts` | Returns durable alert history from the database (survives restarts); empty if it isn't configured |
+| `GET` | `/api/history/hotspots` | Returns every currently-stored thermal hotspot from the database, all fire types included, with a per-type breakdown |
 | `POST`| `/api/alerts/dispatch` | Triggers an emergency response unit dispatch |
-| `POST`| `/api/reports/fire` | Submits a citizen fire sighting (location, optional landmark/description, required reference photo) to Firestore |
+| `POST`| `/api/reports/fire` | Submits a citizen fire sighting (location, optional landmark/description, required reference photo) to the database |
 | `GET` | `/api/reports/fire` | Returns recent citizen-submitted fire reports, newest first |
 | `POST`| `/api/ai/analyze-threat` | Generates a classification-aware tactical mitigation dossier using the selected AI provider |
 | `POST`| `/api/ai/chat` | Interactive incident command Q&A co-pilot for tactical decisions |
@@ -380,13 +382,12 @@ MAPBOX_ACCESS_TOKEN=""
 # Platform hosting URL (Set automatically in production)
 APP_URL="http://localhost:3000"
 
-# Optional: Firebase Admin SDK (Firestore) - persists classified fire data
-# as a live snapshot (location, wind, severity, fire type). Without these,
-# the app runs normally but nothing is saved to Firestore.
-# From Firebase Console > Project Settings > Service Accounts > Generate new private key.
-FIREBASE_PROJECT_ID=""
-FIREBASE_CLIENT_EMAIL=""
-FIREBASE_PRIVATE_KEY=""
+# Optional: Supabase (Postgres) - persists classified fire data as a live
+# snapshot (location, wind, severity, fire type). Without these, the app
+# runs normally but nothing is saved. Run supabase/schema.sql once first,
+# then get these from Project Settings > API (use service_role, not anon).
+SUPABASE_URL=""
+SUPABASE_SERVICE_ROLE_KEY=""
 ```
 
 > Note: Land-cover lookups (used for fire classification) try `GEOAPIFY_API_KEY` first, then `MAPBOX_ACCESS_TOKEN`. Without either set, they fall back to the free public OSM Overpass API, which is frequently unreachable from serverless/cloud IP ranges (mirrors block/drop that traffic) — in that case most far-field fires will show as "Unclassified". Setting `GEOAPIFY_API_KEY` is strongly recommended for any deployment (free, no card required).
@@ -447,10 +448,9 @@ The first run links the directory to a new Vercel project and auto-detects the V
 vercel env add GROQ_API_KEY production
 vercel env add NASA_FIRMS_MAP_KEY production
 vercel env add GEOAPIFY_API_KEY production
-# Optional - only if you've set up Firestore (see below):
-vercel env add FIREBASE_PROJECT_ID production
-vercel env add FIREBASE_CLIENT_EMAIL production
-vercel env add FIREBASE_PRIVATE_KEY production
+# Optional - only if you've set up Supabase (see below):
+vercel env add SUPABASE_URL production
+vercel env add SUPABASE_SERVICE_ROLE_KEY production
 ```
 (repeat with `preview` for preview deployments) — or set them in the Vercel dashboard under **Project → Settings → Environment Variables**.
 

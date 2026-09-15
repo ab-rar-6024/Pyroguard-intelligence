@@ -15,12 +15,12 @@ import {
   loadThermalSnapshot,
   loadPersistenceSeed,
   loadRecentAlerts,
-  isFirestoreConfigured,
+  isDatabaseConfigured,
   saveFireReport,
   loadRecentFireReports,
   voteFireReport,
   getLatestSnapshotAgeMs
-} from '../utils/firestoreService.js';
+} from '../utils/supabaseService.js';
 import { seedFromSnapshot } from '../utils/persistenceTracker.js';
 
 // In-memory store for real-time alerts and satellite anomalies.
@@ -202,7 +202,7 @@ function generateBaselineHotspots(): ThermalAnomaly[] {
 cachedAnomalies = generateBaselineHotspots();
 
 // Cold-start recovery: a fresh serverless instance has empty in-memory
-// state, but the live NASA FIRMS refresh takes 10-15s. Firestore (when
+// state, but the live NASA FIRMS refresh takes 10-15s. The database (when
 // configured) answers in well under a second, so replace the synthetic
 // baseline with the last known real snapshot while live data loads in the
 // background, and seed persistence tracking so "persistent source" status
@@ -210,12 +210,12 @@ cachedAnomalies = generateBaselineHotspots();
 (async () => {
   try {
     const [snapshot, persistenceSeed] = await Promise.all([loadThermalSnapshot(), loadPersistenceSeed()]);
-    // Guard against a race with the live refresh: only apply the Firestore
+    // Guard against a race with the live refresh: only apply the stored
     // snapshot if a real refresh hasn't already completed by the time this
     // resolves, so we never clobber fresher live data with older stored data.
     if (snapshot.length > 0 && lastRefreshAt === 0) {
       cachedAnomalies = snapshot;
-      console.log(`[Cold Start] Restored ${snapshot.length} hotspot(s) from Firestore while live data loads.`);
+      console.log(`[Cold Start] Restored ${snapshot.length} hotspot(s) from the database while live data loads.`);
     }
     if (persistenceSeed.length > 0) {
       seedFromSnapshot(persistenceSeed);
@@ -231,7 +231,7 @@ cachedAnomalies = generateBaselineHotspots();
 // actually did, so timing/errors are recorded directly here instead -
 // this is exactly what surfaced the two real causes of a production
 // hang (an unbounded per-detection loop on a high-volume day, and
-// Firestore quota exhaustion silently stalling via SDK retry/backoff).
+// database quota exhaustion or an outage silently stalling a request).
 // Kept intentionally, not leftover debug scaffolding.
 let refreshDiagnostics: { startedAt: number | null; durationMs: number | null; error: string | null } = {
   startedAt: null,
@@ -269,7 +269,7 @@ async function ensureFreshData(): Promise<void> {
   if (!refreshInFlight) {
     // This instance thinks data is stale, but "lastRefreshAt" only lives in
     // this instance's memory - on a cold start it's always 0, even if
-    // another instance completed a refresh moments ago. Check Firestore
+    // another instance completed a refresh moments ago. Check the database
     // (shared across every instance) before joining the NASA fetch storm;
     // if someone else already refreshed recently, adopt that snapshot
     // directly rather than trusting the module-load cold-start IIFE to
@@ -301,7 +301,7 @@ async function ensureFreshData(): Promise<void> {
   // 55s, not something tighter: the legitimate pipeline is sequential -
   // the multi-region FIRMS fetch (~10-12s, parallel across regions but
   // each individually capped at 10s) then land-cover classification (up
-  // to ~12s, 2 rounds at a 6s cap each) then a Firestore batch write
+  // to ~12s, 2 rounds at a 6s cap each) then a database batch write
   // (its own 25s hard timeout - observed taking 8s+ under sustained
   // free-tier throttling, well above what a healthy write should take)
   // - so a normal, un-hung refresh can legitimately approach 50s under
@@ -350,7 +350,7 @@ export function createApp() {
       activeAlerts: activeAlerts.length,
       firmsStatus,
       groqConfigured: Boolean(process.env.GROQ_API_KEY),
-      firestoreConfigured: isFirestoreConfigured(),
+      databaseConfigured: isDatabaseConfigured(),
       refreshDiagnostics,
       lastSnapshotSave: getLastSnapshotSaveResult()
     });
@@ -446,21 +446,21 @@ export function createApp() {
     });
   });
 
-  // GET /api/history/alerts - Durable alert history from Firestore, survives
-  // cold starts unlike the in-memory /api/alerts above. Empty if Firestore
+  // GET /api/history/alerts - Durable alert history from the database, survives
+  // cold starts unlike the in-memory /api/alerts above. Empty if the database
   // isn't configured.
   app.get('/api/history/alerts', async (req: Request, res: Response) => {
     const data = await loadRecentAlerts(100);
     res.json({
       success: true,
-      firestoreConfigured: isFirestoreConfigured(),
+      databaseConfigured: isDatabaseConfigured(),
       total: data.length,
       data
     });
   });
 
   // GET /api/history/hotspots - Every currently-stored fire/thermal source in
-  // Firestore, all fire types included (industrial fire, gas flare, mining
+  // the database, all fire types included (industrial fire, gas flare, mining
   // thermal, wildfire, agricultural burn, unknown) - not just the rare
   // critical-breach alerts above.
   app.get('/api/history/hotspots', async (req: Request, res: Response) => {
@@ -472,7 +472,7 @@ export function createApp() {
     }
     res.json({
       success: true,
-      firestoreConfigured: isFirestoreConfigured(),
+      databaseConfigured: isDatabaseConfigured(),
       total: data.length,
       byType,
       data
@@ -503,8 +503,8 @@ export function createApp() {
       return res.status(400).json({ success: false, error: 'Photo is too large - please retry (it should be auto-compressed).' });
     }
 
-    if (!isFirestoreConfigured()) {
-      return res.status(503).json({ success: false, error: 'Firestore is not configured on this deployment, so reports cannot be durably stored right now.' });
+    if (!isDatabaseConfigured()) {
+      return res.status(503).json({ success: false, error: 'The database is not configured on this deployment, so reports cannot be durably stored right now.' });
     }
 
     const report: FireReport = {
@@ -554,7 +554,7 @@ export function createApp() {
 
     res.json({
       success: true,
-      firestoreConfigured: isFirestoreConfigured(),
+      databaseConfigured: isDatabaseConfigured(),
       total: withContext.length,
       data: withContext
     });

@@ -420,7 +420,7 @@ export default function App() {
         <GlossaryModal onClose={() => setShowGlossary(false)} />
       )}
 
-      {/* Durable Incident History (Firestore-backed) */}
+      {/* Durable Incident History (Supabase-backed) */}
       {showHistory && (
         <IncidentHistoryModal onClose={() => setShowHistory(false)} />
       )}

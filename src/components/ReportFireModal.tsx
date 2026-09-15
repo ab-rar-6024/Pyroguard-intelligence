@@ -11,7 +11,7 @@ interface ReportFireModalProps {
 const MAX_DIMENSION = 1024;
 
 // Resizes/compresses the photo client-side so the base64 payload stays
-// well under Firestore's 1MiB document limit (and the server's 3MB JSON
+// well under a comfortable size limit (and the server's 3MB JSON
 // body limit) - a raw phone camera photo can be 5-10MB.
 function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

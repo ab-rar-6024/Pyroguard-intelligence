@@ -59,7 +59,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
   const [hotspots, setHotspots] = useState<ThermalAnomaly[]>([]);
   const [reports, setReports] = useState<FireReportWithContext[]>([]);
   const [byType, setByType] = useState<Record<string, number>>({});
-  const [firestoreConfigured, setFirestoreConfigured] = useState(true);
+  const [databaseConfigured, setDatabaseConfigured] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [votedReports, setVotedReports] = useState<Record<string, 'confirm' | 'dispute'>>(() => getVotedReports());
 
@@ -96,7 +96,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
         setByType(hotspotsRes.byType || {});
       }
       if (reportsRes.success) setReports(reportsRes.data || []);
-      setFirestoreConfigured(alertsRes.firestoreConfigured !== false);
+      setDatabaseConfigured(alertsRes.databaseConfigured !== false);
     } catch (e) {
       console.error('Failed to load incident history:', e);
     } finally {
@@ -122,7 +122,7 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
               <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 Incident History
                 <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                  <Database className="w-2.5 h-2.5" /> Firestore
+                  <Database className="w-2.5 h-2.5" /> Supabase
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">Durable record of fire data &amp; simulated dispatches - survives server restarts</p>
@@ -181,21 +181,20 @@ export const IncidentHistoryModal: React.FC<IncidentHistoryModalProps> = ({ onCl
 
         {/* Content */}
         <div className="p-4 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-800 space-y-2">
-          {!firestoreConfigured && (
+          {!databaseConfigured && (
             <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>
-                Firestore isn't configured on this deployment, so there's no durable history yet - only the current
+                The database isn't configured on this deployment, so there's no durable history yet - only the current
                 session's data (visible on the live map) exists, and it'll be lost on the next restart.
-                Set <code className="bg-slate-900 px-1 rounded">FIREBASE_PROJECT_ID</code>,{' '}
-                <code className="bg-slate-900 px-1 rounded">FIREBASE_CLIENT_EMAIL</code>, and{' '}
-                <code className="bg-slate-900 px-1 rounded">FIREBASE_PRIVATE_KEY</code> to enable it.
+                Set <code className="bg-slate-900 px-1 rounded">SUPABASE_URL</code> and{' '}
+                <code className="bg-slate-900 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> to enable it.
               </span>
             </div>
           )}
 
           {loading ? (
-            <div className="py-12 text-center text-slate-500 text-xs">Loading history from Firestore...</div>
+            <div className="py-12 text-center text-slate-500 text-xs">Loading history...</div>
           ) : tab === 'hotspots' ? (
             hotspots.length === 0 ? (
               <div className="py-12 text-center text-slate-500 text-xs">

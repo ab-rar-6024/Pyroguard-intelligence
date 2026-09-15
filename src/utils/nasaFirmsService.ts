@@ -4,9 +4,9 @@ import { ThermalAnomaly, IndustrialFacility, EmergencyAlert, FIRMSFeedStatus } f
 import { recordDetection, pruneStaleCells } from './persistenceTracker.js';
 import { batchQueryLandCover, peekLandCoverCache } from './landCoverService.js';
 import { classifyThermalAnomaly } from './fireClassification.js';
-import { saveThermalSnapshot, SaveSnapshotResult } from './firestoreService.js';
+import { saveThermalSnapshot, SaveSnapshotResult } from './supabaseService.js';
 
-// Exposed via /api/health so a failing/timing-out Firestore write is
+// Exposed via /api/health so a failing/timing-out database write is
 // directly visible without needing log access, which has proven
 // unreliable for this deployment.
 let lastSnapshotSaveResult: SaveSnapshotResult | null = null;
