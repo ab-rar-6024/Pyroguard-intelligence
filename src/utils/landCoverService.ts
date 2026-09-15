@@ -150,9 +150,26 @@ const GEOAPIFY_CATEGORY_TO_LAND_COVER: Record<string, LandCoverType> = {
   'building.office': 'urban'
 };
 
-const GEOAPIFY_CATEGORIES = Object.keys(GEOAPIFY_CATEGORY_TO_LAND_COVER).join(',');
+// Query by PARENT categories only ("natural", "building", ...), not the
+// specific dotted leaf categories in GEOAPIFY_CATEGORY_TO_LAND_COVER
+// (e.g. "natural.forest") - verified directly against the live API that
+// filtering by a leaf category returns zero results even where matching
+// features definitely exist (confirmed via the parent-category query
+// returning them), while combining more than one leaf category returns
+// zero even for leaves that work fine on their own. This looks like a
+// Geoapify Places API quirk with dotted-category filter combinations, not
+// an actual data gap. The specific subcategory is still present on each
+// returned feature's `categories` array either way, so
+// classifyFromGeoapifyFeatures's mapping logic is unaffected - only the
+// query filter needed to change.
+const GEOAPIFY_QUERY_CATEGORIES = 'natural,building,commercial,production,leisure';
 const GEOAPIFY_TIMEOUT_MS = 6000;
-const GEOAPIFY_QUERY_RADIUS_M = 1500;
+// 1500m found almost nothing outside dense urban areas - the vast majority
+// of this app's far-field hotspots are in sparsely-mapped rural/wilderness
+// terrain where the nearest indexed feature (a village, a forest boundary)
+// can legitimately be several km away. 12km still describes the general
+// character of the area a satellite pixel sits in, not an unrelated region.
+const GEOAPIFY_QUERY_RADIUS_M = 12000;
 
 function classifyFromGeoapifyFeatures(features: Array<{ properties?: Record<string, any> }>): LandCoverType {
   const tagCounts: Record<LandCoverType, number> = { forest: 0, farmland: 0, industrial: 0, urban: 0, unknown: 0 };
@@ -170,8 +187,8 @@ function classifyFromGeoapifyFeatures(features: Array<{ properties?: Record<stri
 }
 
 async function queryLandCoverGeoapify(lat: number, lon: number, apiKey: string): Promise<LandCoverType> {
-  const url = `https://api.geoapify.com/v2/places?categories=${GEOAPIFY_CATEGORIES}` +
-    `&filter=circle:${lon},${lat},${GEOAPIFY_QUERY_RADIUS_M}&limit=10&apiKey=${apiKey}`;
+  const url = `https://api.geoapify.com/v2/places?categories=${GEOAPIFY_QUERY_CATEGORIES}` +
+    `&filter=circle:${lon},${lat},${GEOAPIFY_QUERY_RADIUS_M}&limit=20&apiKey=${apiKey}`;
 
   const res = await fetchWithHardTimeout(url, {
     signal: AbortSignal.timeout(GEOAPIFY_TIMEOUT_MS)
