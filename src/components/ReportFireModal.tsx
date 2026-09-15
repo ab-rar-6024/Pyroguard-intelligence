@@ -98,8 +98,12 @@ export const ReportFireModal: React.FC<ReportFireModalProps> = ({ onClose, onSub
       zoomControl: true,
       attributionControl: false
     });
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 16
+    // ESRI World Imagery - real satellite photography, so a reporter can
+    // visually cross-check the ground (tree cover, buildings, terrain)
+    // against what they're actually looking at, not just a dark basemap.
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxNativeZoom: 18,
+      maxZoom: 19
     }).addTo(map);
     map.on('click', (e: L.LeafletMouseEvent) => {
       setPosition({ lat: e.latlng.lat, lon: e.latlng.lng });
