@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-xs: 30rem;
+}
+
 /* Leaflet Dark Tactical Theme Custom Overrides */
 .leaflet-container {
   background-color: #020617 !important;
