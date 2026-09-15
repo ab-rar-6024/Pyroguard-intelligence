@@ -26,20 +26,21 @@ export function getLastSnapshotSaveResult(): SaveSnapshotResult | null {
 // data NASA returns, while still prioritizing the most intense fires.
 const MAX_RAW_DETECTIONS = 5000;
 
-// Cap on far-field (no nearby facility) hotspots NETWORK-queried against OSM
-// per refresh cycle, to keep the public Overpass endpoint call volume
-// bounded. Kept small and bounded: the public Overpass API has no SLA and is
-// frequently slow, so this caps worst-case added latency per refresh to
-// roughly ceil(MAX_LAND_COVER_LOOKUPS / concurrency) * OVERPASS_TIMEOUT_MS
-// (6s as of this writing - see landCoverService.ts) = ~12s worst case here,
-// measured to be well inside this deployment's actual function time budget
-// (a fully-timed-out refresh under the OLD 3s-sequential-mirrors logic
-// still completed in ~26s without the platform killing the request).
+// Cap on far-field (no nearby facility) hotspots NETWORK-queried for land
+// cover per refresh cycle. Was tuned tight (20) for the old OSM Overpass
+// source, which had no SLA and was frequently slow/unreachable from this
+// deployment. Geoapify (the current primary source) measures ~1-2s per
+// query and has shown no rate-limiting in practice, so this can be much
+// higher: 60 lookups at concurrency 20 is ~3 rounds * ~2s = ~6s worst
+// case, well inside the function's time budget. Quota check: Geoapify's
+// free tier is 3,000 requests/day; at steady state (cache warm, 6h TTL
+// per grid cell, a few hundred unique curated locations) that settles
+// to roughly (unique cells / 6h) refreshes/day, well under quota - the
+// higher burst here only matters for how fast a cold cache warms up.
 // Hotspots whose grid cell is already cached from a prior refresh don't
-// count against this budget (see classifyHotspots below), so real-world
-// coverage grows well past this number over successive refreshes.
-const MAX_LAND_COVER_LOOKUPS = 20;
-const LAND_COVER_CONCURRENCY = 10;
+// count against this budget (see classifyHotspots below).
+const MAX_LAND_COVER_LOOKUPS = 60;
+const LAND_COVER_CONCURRENCY = 20;
 const NEAR_FACILITY_KM = 20;
 
 // Attaches persistence + classification data to a curated batch of
