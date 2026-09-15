@@ -31,6 +31,12 @@ export const CLASSIFICATION_META: Record<FireClassification, { label: string; sh
     emoji: '🌾',
     badgeClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40'
   },
+  URBAN_FIRE: {
+    label: 'Urban Fire',
+    short: 'URBAN',
+    emoji: '🏘️',
+    badgeClass: 'bg-red-500/20 text-red-400 border border-red-500/40'
+  },
   UNKNOWN: {
     label: 'Unclassified',
     short: 'UNKNOWN',
@@ -46,5 +52,6 @@ export const CLASSIFICATION_OPTIONS: { id: FireClassification | 'ALL'; label: st
   { id: 'MINING_THERMAL', label: '⛏️ Mining Thermal' },
   { id: 'WILDFIRE', label: '🌲 Wildfire' },
   { id: 'AGRICULTURAL_BURN', label: '🌾 Agricultural Burn' },
+  { id: 'URBAN_FIRE', label: '🏘️ Urban Fire' },
   { id: 'UNKNOWN', label: '❓ Unclassified' }
 ];

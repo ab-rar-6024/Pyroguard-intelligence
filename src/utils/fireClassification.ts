@@ -112,6 +112,16 @@ function classifyFarField(params: {
     };
   }
 
+  if (landCover === 'urban') {
+    return {
+      classification: 'URBAN_FIRE',
+      confidence: isPersistent ? 40 : 55,
+      reasoning: isPersistent
+        ? `Land-use data confirms a built-up residential/commercial area with no registered facility record, but this hotspot has recurred across multiple passes - atypical for a single structure fire and worth manual review.`
+        : `Land-use data confirms a built-up residential/commercial area with no registered industrial facility. ${frp.toFixed(1)} MW thermal output is consistent with a building or urban infrastructure fire rather than an open-area or industrial source.`
+    };
+  }
+
   // Land cover unresolved (not queried, or the public OSM Overpass service is
   // unavailable/rate-limited - it has no SLA and this is a routine, expected
   // fallback path, not an error). A high, single-signature FRP is the one

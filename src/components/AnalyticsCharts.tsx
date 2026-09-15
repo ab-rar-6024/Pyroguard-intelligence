@@ -32,6 +32,7 @@ const CLASSIFICATION_COLORS: Record<FireClassification, string> = {
   MINING_THERMAL: '#fb923c',
   WILDFIRE: '#34d399',
   AGRICULTURAL_BURN: '#facc15',
+  URBAN_FIRE: '#f87171',
   UNKNOWN: '#64748b',
 };
 

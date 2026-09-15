@@ -9,6 +9,7 @@ export type FireClassification =
   | 'MINING_THERMAL'
   | 'WILDFIRE'
   | 'AGRICULTURAL_BURN'
+  | 'URBAN_FIRE'
   | 'UNKNOWN';
 
 // Land-cover context sourced from OpenStreetMap (Overpass API) used as a

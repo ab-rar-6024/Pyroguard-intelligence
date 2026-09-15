@@ -13,6 +13,7 @@ const CLASSIFICATION_EXPLANATIONS: Record<FireClassification, string> = {
   MINING_THERMAL: 'Heat from mining or ore-processing activity — could be normal operations or an underground coal-seam fire.',
   WILDFIRE: 'A fire in forest or wild vegetation, away from any industrial site.',
   AGRICULTURAL_BURN: 'A fire in farmland, most likely a farmer intentionally burning crop residue.',
+  URBAN_FIRE: 'A fire in a built-up residential or commercial area with no registered industrial facility nearby — likely a building or urban infrastructure fire.',
   UNKNOWN: 'Not enough information to confidently say what this is — worth a closer look.'
 };
 
