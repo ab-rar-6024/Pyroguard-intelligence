@@ -147,7 +147,18 @@ const GEOAPIFY_CATEGORY_TO_LAND_COVER: Record<string, LandCoverType> = {
   'building.residential': 'urban',
   'building.commercial': 'urban',
   'building.dormitory': 'urban',
-  'building.office': 'urban'
+  'building.office': 'urban',
+  'building.place_of_worship': 'urban',
+  'building.public_and_civil': 'urban',
+  'building.historic': 'urban',
+  'building.transportation': 'urban',
+  // A bare "building" with no more specific subtype still appeared
+  // frequently in practice (mosques, generic structures OSM hasn't tagged
+  // further) - any indexed building at all is still a genuine, if weak,
+  // built-up-area signal, which is meaningfully better than treating it
+  // as no signal at all (the previous behavior, which left every one of
+  // these "Unclassified" despite Geoapify having found real nearby data).
+  'building': 'urban'
 };
 
 // Query by PARENT categories only ("natural", "building", ...), not the
@@ -176,10 +187,24 @@ function classifyFromGeoapifyFeatures(features: Array<{ properties?: Record<stri
 
   for (const f of features) {
     const categories: string[] = f.properties?.categories || [];
+    // Geoapify's `categories` array includes both a feature's parent and
+    // specific tags together (e.g. ["building", "building.industrial"]),
+    // and the fallback bare "building" -> urban mapping exists precisely
+    // for features with NO more specific tag. Counting every matching
+    // category per feature would double-count those - "building.industrial"
+    // would add one to industrial AND one to urban from the same feature -
+    // diluting a genuine specific signal with the generic one it's paired
+    // with. Take only the single most specific match per feature (the
+    // longest matching key, which is always the most specific one, since
+    // "building.industrial" is a superstring of "building").
+    let bestMatch: { key: string; type: LandCoverType } | null = null;
     for (const cat of categories) {
       const mapped = GEOAPIFY_CATEGORY_TO_LAND_COVER[cat];
-      if (mapped) tagCounts[mapped]++;
+      if (mapped && (!bestMatch || cat.length > bestMatch.key.length)) {
+        bestMatch = { key: cat, type: mapped };
+      }
     }
+    if (bestMatch) tagCounts[bestMatch.type]++;
   }
 
   const sorted = (Object.entries(tagCounts) as [LandCoverType, number][]).sort((a, b) => b[1] - a[1]);
